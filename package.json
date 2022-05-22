@@ -11,7 +11,10 @@
     "react-bootstrap": "^2.4.0",
     "react-dom": "^18.1.0",
     "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "cors": "^2.8.5",
+    "express": "^4.18.1",
+    "pg": "^8.7.3"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -36,5 +39,17 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  }
+  },
+  "description": "This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/michaelli00/umd-tt.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/michaelli00/umd-tt/issues"
+  },
+  "homepage": "https://github.com/michaelli00/umd-tt#readme"
 }
