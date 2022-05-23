@@ -7,8 +7,9 @@ import {
   Route,
   Routes,
 } from "react-router-dom";
+import AdminPage from './components/AdminPage/AdminPage';
 import EventPage from './components/EventPage/EventPage';
-import RatingList from './components/RatingList/RatingList';
+import PlayerList from './components/PlayerList/PlayerList';
 import LeagueList from './components/LeagueList/LeagueList';
 import PlayerProfile from './components/PlayerProfile/PlayerProfile';
 
@@ -25,7 +26,8 @@ function App() {
         </Container>
       </Navbar>
       <Routes>
-        <Route exact path="/" element={<RatingList/>}/>
+        <Route exact path="/" element={<PlayerList/>}/>
+        <Route path="/admin" element={<AdminPage/>}/>
         <Route path="/event/*" element={<EventPage/>}/>
         <Route path="/leagues" element={<LeagueList/>}/>
         <Route path="/player/*" element={<PlayerProfile/>}/>

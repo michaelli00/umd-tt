@@ -4,7 +4,7 @@ import {
   Link,
 } from "react-router-dom";
 
-function RatingList() {
+function PlayerList() {
   const data = [
     {
       id: 1,
@@ -42,4 +42,4 @@ function RatingList() {
   );
 }
 
-export default RatingList;
+export default PlayerList;
