@@ -1,26 +1,29 @@
+-- creating the database called league
 create database league;
 
-create table ratings(
+-- creating the relations
+create table ratings (
     player_id serial primary key,
     player_name varchar(30),
-    rating integer
+    rating integer,
+    active boolean
 );
 
-create table event_times (
-    event_date date primary key,
-    event_id integer
+create table event (
+    event_id integer primary key,
+    event_name varchar(100),
+    event_date date
 );
 
-create table event_matches (
+create table matches (
     event_id integer primary key,
     winner_id integer,
     loser_id integer,
-    score integer[]
+    winner_score integer,
+    loser_score integer,
+    rating_diff integer
 );
 
-create table event_ratings (
-    event_id integer primary key,
-    player_id integer,
-    rating_before integer,
-    rating_after integer
-);
+
+-- inserting some values for testing
+insert into ratings (player_name, rating, active) values ('yash', 2400, TRUE), ('michael', 300, TRUE), ('chris', 400, TRUE);
