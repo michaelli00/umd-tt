@@ -3,6 +3,7 @@ import Table from 'react-bootstrap/Table';
 import {
   Link,
 } from "react-router-dom";
+import './EventPage.css';
 
 function EventPage() {
   const data = {
@@ -36,8 +37,8 @@ function EventPage() {
   }
 
   return (
-    <Container>
-      {data.name}
+    <Container className="EventPage">
+      <h1>{data.name}</h1>
       <Table striped bordered hover size="sm">
         <thead>
           <tr>
@@ -58,7 +59,8 @@ function EventPage() {
           )}
         </tbody>
       </Table>
-      Ratings
+      <br/>
+      <h1>Rating Changes</h1>
       <Table striped bordered hover size="sm">
         <thead>
           <tr>

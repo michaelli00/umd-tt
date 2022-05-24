@@ -1,4 +1,5 @@
 import Container from 'react-bootstrap/Container';
+import './PlayerProfile.css';
 
 function PlayerProfile() {
   const data = {
@@ -9,11 +10,11 @@ function PlayerProfile() {
   }
 
   return (
-    <Container>
-      {data.playerID}
-      {data.name}
-      {data.rating}
-      {data.active}
+    <Container className="PlayerProfile">
+      <h1> {data.name} </h1>
+      <div className="player-info"><b>Player ID</b>: &nbsp; {data.playerID} </div>
+      <div className="player-info"><b>Player Rating</b>: &nbsp; {data.rating} </div>
+      <div className="player-info"><b>Player Active</b>: &nbsp; {data.active ? 'Active' : 'Inactive'} </div>
     </Container>
   );
 }

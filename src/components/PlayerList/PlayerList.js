@@ -3,6 +3,7 @@ import Table from 'react-bootstrap/Table';
 import {
   Link,
 } from "react-router-dom";
+import './PlayerList.css';
 
 function PlayerList() {
   const data = [
@@ -21,7 +22,8 @@ function PlayerList() {
   ];
 
   return (
-    <Container>
+    <Container className="PlayerList">
+      <h1>Player/Rating List</h1>
       <Table striped bordered hover size="sm">
         <thead>
           <tr>
