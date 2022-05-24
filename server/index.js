@@ -24,13 +24,27 @@ app.get('/api/players', (req, res) => {
 // returns all the information for a single player given the player id
 // returns { "pid" : player_ID, "pname" : player_name, "pr" : rating, events : [{ "eid" : event_id, "ename" : event_name, "rating_before" : rating_before, "rating_after" : rating_after }, ... ] }
 app.get('/api/player/:id', (req, res) => {
+    // pool.query(``, (err, results) => {
 
+    // });
+    res.status(501).send("not implemented yet");
 });
 
 // returns all the unique dates for all the events
 // returns { "dates" : [ date1, date2, ... ] }
 app.get('/api/dates', (req, res) => {
-
+    pool.query("select distinct event_date from events order by event_date asc", (err,results) => {
+        // console.log("results:\n"+JSON.stringify(results.rows)+"\n");
+        if (err) { console.log("hey there was an error: \n" + err); res.status(500).send("something went wrong"); return;}
+        let result = {"dates": []}
+        if (results) {
+            for (let row of results.rows) {
+                // console.log(JSON.stringify(row["event_date"]));
+                result["dates"].push((row["event_date"].toISOString()).split("T")[0]);
+            }
+        }
+        res.status(200).json(result)
+    });
 });
 
 // returns all the information for a specific event given event id
