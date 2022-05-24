@@ -9,10 +9,10 @@ create table ratings (
     active boolean
 );
 
-create table event (
-    event_id integer primary key,
-    event_name varchar(100),
-    event_date date
+create table events (
+    event_id integer primary key, -- prob should be serial
+    event_name varchar(100) not null,
+    event_date date not null default current_date
 );
 
 create table matches (
