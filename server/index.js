@@ -11,12 +11,13 @@ app.use(express.json());
 // routes
 
 // returns the id, name and rating of each player
-// returns { "list" : [ {"pid" : player_ID, "pname" : player_name, "pr" : rating}, ... ] }
+// returns { "list" : [ {"pid" : player_ID, "pname" : player_name, "pr" : rating, "active" : active}, ... ] }
 app.get('/api/players', (req, res) => {
-    pool.query("select * from ratings where active=TRUE order by rating desc, player_id asc", (err, results) => {
-        console.log("results:\n"+results+"\n\n\n");
-        if (err) { console.log("hey there was an error: \n" + err); res.status(500).send("something went wrong"); return;}
-        res.status(200).json(results.rows)
+    pool.query("select player_id as pid, player_name as pname, rating as pr, active from ratings order by rating desc, player_id asc", (err, results) => {
+        // console.log("results:\n"+JSON.stringify(results.rows)+"\n\n\n");
+        if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
+        let result = {"list": results.rows}
+        res.status(200).json(result)
     });
 });
 
