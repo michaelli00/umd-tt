@@ -35,7 +35,7 @@ app.get('/api/player/:id', (req, res) => {
 app.get('/api/dates', (req, res) => {
     pool.query("select distinct event_date from events order by event_date asc", (err,results) => {
         // console.log("results:\n"+JSON.stringify(results.rows)+"\n");
-        if (err) { console.log("hey there was an error: \n" + err); res.status(500).send("something went wrong"); return;}
+        if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
         let result = {"dates": []}
         if (results) {
             for (let row of results.rows) {
@@ -53,7 +53,30 @@ app.get('/api/dates', (req, res) => {
 // "ratings" : [ { "pid" : player_id, "pname" : player_name, "rating_before" : rating_before, 
 // "rating_after" : rating_after }, ... ], “ename”: event_name, “edate”: event_date }
 app.get('/api/event/:event_id', (req, res) => {
+    let result = {"matches" : [], "ratings" : [], "ename" : "", "edate" : ""};
+    
+    // adding the event name and date to the result
+    pool.query(`select event_name, event_date from events where event_id=${req.params.event_id}`, (err,results) => {
+        if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
+        // console.log(results.rows[0]["event_name"]+"\n"+results.rows[0]["event_date"].toISOString().split("T")[0])
+        result["ename"] = results.rows[0]["event_name"];
+        result["edate"] = results.rows[0]["event_date"].toISOString().split("T")[0];
+    });
 
+    // adding the matches to the result
+    pool.query(`select m.winner_id, m.loser_id, m.winner_score, m.loser_score, r1.player_name as winner_name, r2.player_name as loser_name from (matches m join ratings r1 on m.winner_id=r1.player_id) join ratings r2 on m.loser_id=r2.player_id where m.event_id=${req.params.event_id}`, (err,results) => {
+        if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
+        result["matches"] = results.rows;
+        console.log(result);
+        // res.status(200).json(result);
+    });
+
+    // adding the ratings to the result
+    // pool.query()
+    // for each player, sum up all the rating_diff for all past events (making the assumption that event id's are absolutely increasing) for every time player id = winner id, and subtract from that the sum of rating_diff from all past events for whenever player id = loser id
+    // sum(select rating_diff from matches where event_id<${req.params.event_id} and player_id=winner_id) - sum(select rating_diff from matches where event_id<${req.params.event_id} and player_id=loser_id) as rating_before group by player_id
+    // console.log(result);
+    res.status(200).json(result);
 });
 
 /////////////////////////////

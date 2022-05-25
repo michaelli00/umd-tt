@@ -10,13 +10,13 @@ create table ratings (
 );
 
 create table events (
-    event_id integer primary key, -- prob should be serial
+    event_id serial primary key, 
     event_name varchar(100) not null,
     event_date date not null default current_date
 );
 
 create table matches (
-    event_id integer primary key,
+    event_id integer,
     winner_id integer,
     loser_id integer,
     winner_score integer,
