@@ -91,33 +91,49 @@ function AdminList() {
   const eventList = [
     {
       id: 1,
-      name: '5/22/2022 Group 1',
+      date: '5/22/2022',
+      name: 'Group 1',
     },
     {
       id: 2,
-      name: '5/22/2022 Group 2',
+      date: '5/22/2022',
+      name: 'Group 2',
     },
     {
       id: 3,
-      name: '5/22/2022 Group 3',
+      date: '5/22/2022',
+      name: 'Group 3',
     },
     {
       id: 4,
-      name: '5/22/2022 Group 4',
+      date: '5/22/2022',
+      name: 'Group 4',
     },
     {
       id: 5,
-      name: '5/21/2022 Group 1',
+      date: '5/21/2022',
+      name: 'Group 1',
     },
     {
       id: 6,
-      name: '5/21/2022 Group 2',
+      date: '5/21/2022',
+      name: 'Group 2',
     },
     {
       id: 7,
-      name: '5/21/2022 Group 3',
+      date: '5/21/2022',
+      name: 'Group 3',
     },
   ];
+
+  const eventIndicesWithDifferentDates = [];
+  let currEventDate = "";
+  eventList.forEach((event, index) => {
+    if (event.date !== currEventDate) {
+      currEventDate = event.date;
+      eventIndicesWithDifferentDates.push(index);
+    }
+  });
 
   return (
     <Container className="AdminPage">
@@ -225,14 +241,16 @@ function AdminList() {
           <Table striped bordered hover size="sm">
             <thead>
               <tr>
+                <th>Date</th>
                 <th>Event Name</th>
                 <th>Change Event Results</th>
               </tr>
             </thead>
             <tbody>
-              {eventList.map(datum =>
+              {eventList.map((datum, index) =>
                 <tr key={datum.id}>
-                  <td>{datum.name}</td>
+                  {eventIndicesWithDifferentDates.includes(index) ? <td>{datum.date}</td> : <td></td>}
+                  <td><Link to={`/event/${datum.id}`}>{datum.name}</Link></td>
                   <td><Button>Change Results</Button></td>
                 </tr>
               )}
