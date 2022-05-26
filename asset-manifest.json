@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/umd-tt/static/css/main.005fdafe.css",
+    "main.js": "/umd-tt/static/js/main.b6a5fd9b.js",
+    "index.html": "/umd-tt/index.html",
+    "main.005fdafe.css.map": "/umd-tt/static/css/main.005fdafe.css.map",
+    "main.b6a5fd9b.js.map": "/umd-tt/static/js/main.b6a5fd9b.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.005fdafe.css",
+    "static/js/main.b6a5fd9b.js"
+  ]
+}
