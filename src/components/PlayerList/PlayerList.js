@@ -1,25 +1,24 @@
+import { useEffect, useState } from 'react';
 import Container from 'react-bootstrap/Container';
 import Table from 'react-bootstrap/Table';
 import {
   Link,
 } from "react-router-dom";
+import {
+  fetchPlayers,
+} from '../../utils/Utils';
 import './PlayerList.css';
 
 function PlayerList() {
-  const data = [
-    {
-      id: 1,
-      name: "Michael",
-      rating: 2000,
-      active: false,
-    },
-    {
-      id: 2,
-      name: "Yash",
-      rating: 1000,
-      active: true,
+  const [players, setPlayers] = useState([]);
+
+  useEffect(() => {
+    let loadPlayerData = async () => {
+      setPlayers(await fetchPlayers());
     }
-  ];
+
+    loadPlayerData();
+  }, []);
 
   return (
     <Container className="PlayerList">
@@ -32,10 +31,10 @@ function PlayerList() {
           </tr>
         </thead>
         <tbody>
-          {data.map(datum =>
-            <tr key={datum.id}>
-              <td><Link to = {`/player/${datum.id}`}>{datum.name}</Link></td>
-              <td>{datum.rating}</td>
+          {players.map(player =>
+            <tr key={player.pid}>
+              <td><Link to = {`/player/${player.pid}`}>{player.pname}</Link></td>
+              <td>{player.pr}</td>
             </tr>
           )}
         </tbody>

@@ -1,22 +1,25 @@
 const express = require('express');
 const app = express();
 const cors = require('cors');
+const path = require('path')
 const pool = require('./db');
 const get_points_exchanged = require('./rating_algo');
 
 // middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.resolve(__dirname, '../build')));
 
 // routes
 
+// TODO why can't we just return an array rather than access it through .list field
 // returns the id, name and rating of each player
 // returns { "list" : [ {"pid" : player_ID, "pname" : player_name, "pr" : rating, "active" : active}, ... ] }
 app.get('/api/players', (req, res) => {
     pool.query("select player_id as pid, player_name as pname, rating as pr, active from ratings order by rating desc, player_id asc", (err, results) => {
         // console.log("results:\n"+JSON.stringify(results.rows)+"\n\n\n");
         if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
-        let result = {"list": results.rows}
+        let result = results.rows;
         res.status(200).json(result)
     });
 });
@@ -48,9 +51,9 @@ app.get('/api/dates', (req, res) => {
 });
 
 // returns all the information for a specific event given event id
-// returns { "matches" : [ { "winner_id" : winner_id, "winner_name" : winner_name, "loser_id" : loser_id, 
-// “loser_name” : loser_name, "winner_score" : winner_score, "loser_score" : loser_score }, ... ], 
-// "ratings" : [ { "pid" : player_id, "pname" : player_name, "rating_before" : rating_before, 
+// returns { "matches" : [ { "winner_id" : winner_id, "winner_name" : winner_name, "loser_id" : loser_id,
+// “loser_name” : loser_name, "winner_score" : winner_score, "loser_score" : loser_score }, ... ],
+// "ratings" : [ { "pid" : player_id, "pname" : player_name, "rating_before" : rating_before,
 // "rating_after" : rating_after }, ... ], “ename”: event_name, “edate”: event_date }
 app.get('/api/event/:event_id', (req, res) => {
 
