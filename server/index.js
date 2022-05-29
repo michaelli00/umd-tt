@@ -36,7 +36,36 @@ app.get('/api/player/:id', (req, res) => {
 
     // getting event information
     // 
-    res.status(200).json(result);
+    pool.query(`drop table if exists temp;
+    create temporary table temp (eid integer,ename varchar(255),rating_before integer,rating_after integer);
+    do
+    $$
+    declare
+        f record;
+    begin
+        for f in (with events (eid, ename) as (
+            select distinct event_id,event_name 
+            from (
+                select e.event_name, e.event_id,m.winner_id, m.loser_id 
+                from events e join matches m 
+                on m.winner_id=${req.params.id} or m.loser_id=${req.params.id}
+                where e.event_id in (select distinct event_id from matches)
+            ) as temp
+        ) select eid,ename from events order by eid asc) 
+        loop 
+            insert into temp select f.eid, f.ename, coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<f.eid),0) as rating_before, coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<=f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<=f.eid),0) as rating_after;
+        end loop;
+    end;
+    $$;
+    select * from temp;`, (err,results) => {
+        // console.log("HERE")
+        if (err) { console.log("hey there was an error: \n" + err); res.status(500).send("something went wrong"); return;}
+        result["events"] = results[3].rows;
+        // console.log(err);
+        // console.log(results.rows);
+        res.status(200).json(result);        
+    });
+    // res.status(200).json(result);
 });
 
 // returns all the unique dates for all the events
