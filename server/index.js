@@ -22,12 +22,21 @@ app.get('/api/players', (req, res) => {
 });
 
 // returns all the information for a single player given the player id
-// returns { "pid" : player_ID, "pname" : player_name, "pr" : rating, events : [{ "eid" : event_id, "ename" : event_name, "rating_before" : rating_before, "rating_after" : rating_after }, ... ] }
+// returns { "pid" : player_ID, "pname" : player_name, "pr" : rating, "active": active, events : [{ "eid" : event_id, "ename" : event_name, "rating_before" : rating_before, "rating_after" : rating_after }, ... ] }
 app.get('/api/player/:id', (req, res) => {
-    // pool.query(``, (err, results) => {
+    let result = {"pid": -1, "pname": "", "pr":-1, "events":[]}
+    // getting the name, id and current rating
+    pool.query(`select * from ratings where player_id=${req.params.id}`, (err, results) => {
+        if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
+        result["pid"] = results.rows[0]["player_id"]
+        result["pname"] = results.rows[0]["player_name"]
+        result["pr"] = results.rows[0]["rating"]
+        result["active"] = results.rows[0]["active"]
+    });
 
-    // });
-    res.status(501).send("not implemented yet");
+    // getting event information
+    // 
+    res.status(200).json(result);
 });
 
 // returns all the unique dates for all the events
@@ -49,7 +58,7 @@ app.get('/api/dates', (req, res) => {
 
 // returns all the information for a specific event given event id
 // returns { "matches" : [ { "winner_id" : winner_id, "winner_name" : winner_name, "loser_id" : loser_id, 
-// “loser_name” : loser_name, "winner_score" : winner_score, "loser_score" : loser_score }, ... ], 
+// “loser_name” : loser_name, "winner_score" : winner_score, "loser_score" : loser_score, "points_exchanged": points_exchanged}, ... ], 
 // "ratings" : [ { "pid" : player_id, "pname" : player_name, "rating_before" : rating_before, 
 // "rating_after" : rating_after }, ... ], “ename”: event_name, “edate”: event_date }
 app.get('/api/event/:event_id', (req, res) => {
@@ -64,19 +73,49 @@ app.get('/api/event/:event_id', (req, res) => {
     });
 
     // adding the matches to the result
-    pool.query(`select m.winner_id, m.loser_id, m.winner_score, m.loser_score, r1.player_name as winner_name, r2.player_name as loser_name from (matches m join ratings r1 on m.winner_id=r1.player_id) join ratings r2 on m.loser_id=r2.player_id where m.event_id=${req.params.event_id}`, (err,results) => {
+    pool.query(`select m.winner_id, m.loser_id, m.winner_score, m.loser_score, r1.player_name as winner_name, r2.player_name as loser_name, m.rating_diff from (matches m join ratings r1 on m.winner_id=r1.player_id) join ratings r2 on m.loser_id=r2.player_id where m.event_id=${req.params.event_id}`, (err,results) => {
         if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
         result["matches"] = results.rows;
-        console.log(result);
+        // console.log(result);
         // res.status(200).json(result);
     });
 
     // adding the ratings to the result
-    // pool.query()
-    // for each player, sum up all the rating_diff for all past events (making the assumption that event id's are absolutely increasing) for every time player id = winner id, and subtract from that the sum of rating_diff from all past events for whenever player id = loser id
+    // for each player, sum up all the rating_diff for all past events - assuming that event id's are absolutely increasing (earliest events always entered first) - for every time player id = winner id, and subtract from that the sum of rating_diff from all past events for whenever player id = loser id
     // sum(select rating_diff from matches where event_id<${req.params.event_id} and player_id=winner_id) - sum(select rating_diff from matches where event_id<${req.params.event_id} and player_id=loser_id) as rating_before group by player_id
+    // with players (pid, pname) as (select distinct player_id,player_name from (select r.player_name, r.player_id,m.winner_id, m.loser_id from ratings r join matches m on r.player_id=m.winner_id or r.player_id=m.loser_id) as temp) select * from players order by pid asc;
+    // select sum(m1.rating_diff)-sum(m2.rating_diff) as tot_diff from matches m1 full outer join matches m2 on m1.winner_id=m2.loser_id;
+    pool.query(`drop table if exists temp;
+    create temporary table temp (pid integer,pname varchar(255),rating_before integer,rating_after integer);
+    do
+    $$
+    declare
+        f record;
+    begin
+        for f in (with players (pid, pname) as (
+            select distinct player_id,player_name 
+            from (
+                select r.player_name, r.player_id,m.winner_id, m.loser_id 
+                from ratings r join matches m 
+                on r.player_id=m.winner_id or r.player_id=m.loser_id
+                where m.event_id=${req.params.event_id}
+            ) as temp
+        ) select pid,pname from players order by pid asc) 
+        loop 
+            insert into temp select f.pid, f.pname, coalesce((select sum(rating_diff) from matches m where winner_id=f.pid and m.event_id<${req.params.event_id}),0) - coalesce((select sum(rating_diff) from matches m where loser_id=f.pid and m.event_id<${req.params.event_id}),0) as rating_before, coalesce((select sum(rating_diff) from matches m where winner_id=f.pid and m.event_id<=${req.params.event_id}),0) - coalesce((select sum(rating_diff) from matches m where loser_id=f.pid and m.event_id<=${req.params.event_id}),0) as rating_after;
+        end loop;
+    end;
+    $$;
+    select * from temp;`, (err,results) => {
+        if (err) { console.log("hey there was an error: \n" + err); res.status(500).send("something went wrong"); return;}
+        result["ratings"] = results[3].rows;
+        // console.log(err);
+        // console.log(results.rows);
+        res.status(200).json(result);        
+    });
     // console.log(result);
-    res.status(200).json(result);
+
+    // res.status(200).json(result);
 });
 
 /////////////////////////////
