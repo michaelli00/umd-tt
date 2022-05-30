@@ -1,16 +1,37 @@
-import { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Multiselect from 'multiselect-react-dropdown';
 import Button from 'react-bootstrap/Button';
 import Container from 'react-bootstrap/Container';
 import Form from 'react-bootstrap/Form';
 import Modal from 'react-bootstrap/Modal';
 import Table from 'react-bootstrap/Table';
-import Multiselect from 'multiselect-react-dropdown';
+import ReactLoading from 'react-loading';
 import {
   Link,
 } from "react-router-dom";
+import {
+  fetchPlayers,
+} from '../../utils/Utils';
 import './AdminPage.css';
 
 function AdminList() {
+  const [adminValidated, setAdminValidated] = useState(false);
+  const [showResultsForm, setShowResultsForm] = useState(false);
+  const [showAddPlayerForm, setShowAddPlayerForm] = useState(false);
+  const [selectedPlayersInGroup, setSelectedPlayersInGroup] = useState([]);
+  const [players, setPlayers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [events, setEvents] = useState([]);
+
+  useEffect(() => {
+    let loadPlayerData = async () => {
+      setPlayers(await fetchPlayers());
+    }
+
+    loadPlayerData();
+    setLoading(false);
+  }, []);
+
   const playerList = [
     {
       id: 1,
@@ -25,11 +46,6 @@ function AdminList() {
       active: true,
     }
   ];
-
-  const [adminValidated, setAdminValidated] = useState(true);
-  const [showResultsForm, setShowResultsForm] = useState(false);
-  const [showAddPlayerForm, setShowAddPlayerForm] = useState(false);
-  const [selectedPlayersInGroup, setSelectedPlayersInGroup] = useState([]);
 
   const onSignIn = event => {
     event.preventDefault();
@@ -137,137 +153,143 @@ function AdminList() {
 
   return (
     <Container className="AdminPage">
-      <Modal size="lg" show={showAddPlayerForm} onHide={onCloseAddPlayerForm} backdrop="static">
-        <Modal.Header closeButton>
-          <Modal.Title>Add a New Player</Modal.Title>
-        </Modal.Header>
-          <Form onSubmit={onSubmitAddPlayerForm}>
-            <Modal.Body>
-              <Form.Group controlId="formBasicName" className="admin-form">
-                <Form.Label><h5>Player Name</h5></Form.Label>
-                <Form.Control
-                  type="input"
-                  placeholder="Name"
-                />
-              </Form.Group>
+      {!loading ?
+        <React.Fragment>
+          <Modal size="lg" show={showAddPlayerForm} onHide={onCloseAddPlayerForm} backdrop="static">
+            <Modal.Header closeButton>
+              <Modal.Title>Add a New Player</Modal.Title>
+            </Modal.Header>
+              <Form onSubmit={onSubmitAddPlayerForm}>
+                <Modal.Body>
+                  <Form.Group controlId="formBasicName" className="admin-form">
+                    <Form.Label><h5>Player Name</h5></Form.Label>
+                    <Form.Control
+                      type="input"
+                      placeholder="Name"
+                    />
+                  </Form.Group>
+                  <br/>
+                  <Form.Group controlId="formBasicRating" className="admin-form">
+                    <Form.Label><h5>Rating (Optional)</h5></Form.Label>
+                    <Form.Control
+                      type="text"
+                      placeholder="Rating (Optional)"
+                    />
+                  </Form.Group>
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button variant="secondary" onClick={onCloseAddPlayerForm}>
+                    Close
+                  </Button>
+                  <Button variant="primary" type="submit">
+                    Add Player
+                  </Button>
+                </Modal.Footer>
+              </Form>
+          </Modal>
+          <Modal size="lg" show={showResultsForm} onHide={onCloseResultsForm} backdrop="static">
+            <Modal.Header closeButton>
+              <Modal.Title>Add or Update an Event</Modal.Title>
+            </Modal.Header>
+              <Form onSubmit={onSubmitResultsForm}>
+                <Modal.Body>
+                  <Form.Group controlId="formBasicName" className="admin-form">
+                    <Form.Label><h5>Event Name</h5></Form.Label>
+                    <Form.Control type="input" placeholder="Name"/>
+                  </Form.Group>
+                  <br/>
+                  <Form.Group controlId="formBasicSelectPlayers" className="admin-form">
+                    <Form.Label><h5>Select Players</h5></Form.Label>
+                    <Multiselect
+                      options={players.map(player => {return {name: player.pname, id: player.pid}})}
+                      selectedVluaes={selectedPlayersInGroup}
+                      onSelect={onChangeSelectedGroupPlayers}
+                      onRemove={onChangeSelectedGroupPlayers}
+                      displayValue="name"
+                    />
+                  </Form.Group>
+                  <br/>
+                  <br/>
+                  <br/>
+                  {selectedPlayersInGroup.length > 1 && renderMatchResultsForm(selectedPlayersInGroup)}
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button variant="secondary" onClick={onCloseResultsForm}>
+                    Close
+                  </Button>
+                  <Button variant="primary" type="submit">
+                    Submit Event Results
+                  </Button>
+                </Modal.Footer>
+              </Form>
+          </Modal>
+          {adminValidated ?
+            <div>
+              <div className="admin-header">
+                <h1>Player List</h1>
+                <div className="change-button">
+                  <Button onClick={onOpenAddPlayerForm}>Add New Player</Button>
+                </div>
+              </div>
+              <Table striped bordered hover size="sm">
+                <thead>
+                  <tr>
+                    <th>Player Name</th>
+                    <th>Rating</th>
+                    <th>Active/Inactive</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {players.map(player =>
+                    <tr key={player.pid}>
+                      <td><Link to = {`/player/${player.id}`}>{player.pname}</Link></td>
+                      <td>{player.pr}</td>
+                      <td><Button>{player.active ? 'Active' : 'Inactive'}</Button></td>
+                    </tr>
+                  )}
+                </tbody>
+              </Table>
               <br/>
-              <Form.Group controlId="formBasicRating" className="admin-form">
-                <Form.Label><h5>Rating (Optional)</h5></Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="Rating (Optional)"
-                />
-              </Form.Group>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="secondary" onClick={onCloseAddPlayerForm}>
-                Close
-              </Button>
-              <Button variant="primary" type="submit">
-                Add Player
-              </Button>
-            </Modal.Footer>
-          </Form>
-      </Modal>
-      <Modal size="lg" show={showResultsForm} onHide={onCloseResultsForm} backdrop="static">
-        <Modal.Header closeButton>
-          <Modal.Title>Add or Update an Event</Modal.Title>
-        </Modal.Header>
-          <Form onSubmit={onSubmitResultsForm}>
-            <Modal.Body>
-              <Form.Group controlId="formBasicName" className="admin-form">
-                <Form.Label><h5>Event Name</h5></Form.Label>
-                <Form.Control type="input" placeholder="Name"/>
-              </Form.Group>
-              <br/>
-              <Form.Group controlId="formBasicSelectPlayers" className="admin-form">
-                <Form.Label><h5>Select Players</h5></Form.Label>
-                <Multiselect
-                  options={playerList.map(player => {return {name: player.name, id: player.id}})}
-                  selectedVluaes={selectedPlayersInGroup}
-                  onSelect={onChangeSelectedGroupPlayers}
-                  onRemove={onChangeSelectedGroupPlayers}
-                  displayValue="name"
-                />
-              </Form.Group>
-              <br/>
-              <br/>
-              <br/>
-              {selectedPlayersInGroup.length > 1 && renderMatchResultsForm(selectedPlayersInGroup)}
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="secondary" onClick={onCloseResultsForm}>
-                Close
-              </Button>
-              <Button variant="primary" type="submit">
-                Submit Event Results
-              </Button>
-            </Modal.Footer>
-          </Form>
-      </Modal>
-      {adminValidated ?
-        <div>
-          <div className="admin-header">
-            <h1>Player List</h1>
-            <div className="change-button">
-              <Button onClick={onOpenAddPlayerForm}>Add New Player</Button>
+              <div className="admin-header">
+                <h1>Event List</h1>
+                <div className="change-button">
+                  <Button onClick= {onOpenResultsForm}>Submit Event Results</Button>
+                </div>
+              </div>
+              <Table striped bordered hover size="sm">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Event Name</th>
+                    <th>Change Event Results</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {eventList.map((datum, index) =>
+                    <tr key={datum.id}>
+                      {eventIndicesWithDifferentDates.includes(index) ? <td>{datum.date}</td> : <td></td>}
+                      <td><Link to={`/event/${datum.id}`}>{datum.name}</Link></td>
+                      <td><Button>Change Results</Button></td>
+                    </tr>
+                  )}
+                </tbody>
+              </Table>
             </div>
-          </div>
-          <Table striped bordered hover size="sm">
-            <thead>
-              <tr>
-                <th>Player Name</th>
-                <th>Rating</th>
-                <th>Active/Inactive</th>
-              </tr>
-            </thead>
-            <tbody>
-              {playerList.map(datum =>
-                <tr key={datum.id}>
-                  <td><Link to = {`/player/${datum.id}`}>{datum.name}</Link></td>
-                  <td>{datum.rating}</td>
-                  <td><Button>{datum.active ? 'Active' : 'Inactive'}</Button></td>
-                </tr>
-              )}
-            </tbody>
-          </Table>
-          <br/>
-          <div className="admin-header">
-            <h1>Event List</h1>
-            <div className="change-button">
-              <Button onClick= {onOpenResultsForm}>Submit Event Results</Button>
-            </div>
-          </div>
-          <Table striped bordered hover size="sm">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Event Name</th>
-                <th>Change Event Results</th>
-              </tr>
-            </thead>
-            <tbody>
-              {eventList.map((datum, index) =>
-                <tr key={datum.id}>
-                  {eventIndicesWithDifferentDates.includes(index) ? <td>{datum.date}</td> : <td></td>}
-                  <td><Link to={`/event/${datum.id}`}>{datum.name}</Link></td>
-                  <td><Button>Change Results</Button></td>
-                </tr>
-              )}
-            </tbody>
-          </Table>
-        </div>
-        :
-        <Form onSubmit={onSignIn}>
-          <h1>Enter the Admin Password</h1>
-          <Form.Group controlId="formBasicPassword" className="admin-form">
-            <Form.Control
-              type="password"
-              placeholder="Password"
-            />
-            <Button type="submit">Submit</Button>
-          </Form.Group>
-        </Form>
+            :
+            <Form onSubmit={onSignIn}>
+              <h1>Enter the Admin Password</h1>
+              <Form.Group controlId="formBasicPassword" className="admin-form">
+                <Form.Control
+                  type="password"
+                  placeholder="Password"
+                />
+                <Button type="submit">Submit</Button>
+              </Form.Group>
+            </Form>
+          }
+        </React.Fragment>
+      :
+        <ReactLoading type='spin' color='#C41E3A' className='react-loading'/>
       }
     </Container>
   );

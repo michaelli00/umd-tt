@@ -1,45 +1,53 @@
+import React, { useEffect, useState } from 'react';
 import Container from 'react-bootstrap/Container';
 import Table from 'react-bootstrap/Table';
+import ReactLoading from 'react-loading';
 import {
   Link,
 } from "react-router-dom";
+import {
+  fetchPlayers,
+} from '../../utils/Utils';
 import './PlayerList.css';
 
 function PlayerList() {
-  const data = [
-    {
-      id: 1,
-      name: "Michael",
-      rating: 2000,
-      active: false,
-    },
-    {
-      id: 2,
-      name: "Yash",
-      rating: 1000,
-      active: true,
+  const [players, setPlayers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let loadPlayerData = async () => {
+      setPlayers(await fetchPlayers());
+      setLoading(false);
     }
-  ];
+
+    loadPlayerData();
+  }, []);
 
   return (
     <Container className="PlayerList">
-      <h1>Player/Rating List</h1>
-      <Table striped bordered hover size="sm">
-        <thead>
-          <tr>
-            <th>Player Name</th>
-            <th>Rating</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map(datum =>
-            <tr key={datum.id}>
-              <td><Link to = {`/player/${datum.id}`}>{datum.name}</Link></td>
-              <td>{datum.rating}</td>
-            </tr>
-          )}
-        </tbody>
-      </Table>
+      {!loading ?
+        <React.Fragment>
+          <h1>Player/Rating List</h1>
+          <Table striped bordered hover size="sm">
+            <thead>
+              <tr>
+                <th>Player Name</th>
+                <th>Rating</th>
+              </tr>
+            </thead>
+            <tbody>
+              {players.map(player =>
+                <tr key={player.pid}>
+                  <td><Link to = {`/player/${player.pid}`}>{player.pname}</Link></td>
+                  <td>{player.pr}</td>
+                </tr>
+              )}
+            </tbody>
+          </Table>
+        </React.Fragment>
+      :
+        <ReactLoading type='spin' color='#C41E3A' className='react-loading'/>
+      }
     </Container>
   );
 }

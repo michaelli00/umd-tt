@@ -1,12 +1,14 @@
 const express = require('express');
 const app = express();
 const cors = require('cors');
+const path = require('path')
 const pool = require('./db');
 const get_points_exchanged = require('./rating_algo');
 
 // middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.resolve(__dirname, '../build')));
 
 // routes
 
@@ -35,7 +37,7 @@ app.get('/api/player/:id', (req, res) => {
     });
 
     // getting event information
-    // 
+    //
     pool.query(`drop table if exists temp;
     create temporary table temp (eid integer,ename varchar(255),rating_before integer,rating_after integer);
     do
@@ -44,15 +46,15 @@ app.get('/api/player/:id', (req, res) => {
         f record;
     begin
         for f in (with events (eid, ename) as (
-            select distinct event_id,event_name 
+            select distinct event_id,event_name
             from (
-                select e.event_name, e.event_id,m.winner_id, m.loser_id 
-                from events e join matches m 
+                select e.event_name, e.event_id,m.winner_id, m.loser_id
+                from events e join matches m
                 on m.winner_id=${req.params.id} or m.loser_id=${req.params.id}
                 where e.event_id in (select distinct event_id from matches)
             ) as temp
-        ) select eid,ename from events order by eid asc) 
-        loop 
+        ) select eid,ename from events order by eid asc)
+        loop
             insert into temp select f.eid, f.ename, coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<f.eid),0) as rating_before, coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<=f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<=f.eid),0) as rating_after;
         end loop;
     end;
@@ -63,7 +65,7 @@ app.get('/api/player/:id', (req, res) => {
         result["events"] = results[3].rows;
         // console.log(err);
         // console.log(results.rows);
-        res.status(200).json(result);        
+        res.status(200).json(result);
     });
     // res.status(200).json(result);
 });
@@ -86,13 +88,13 @@ app.get('/api/dates', (req, res) => {
 });
 
 // returns all the information for a specific event given event id
-// returns { "matches" : [ { "winner_id" : winner_id, "winner_name" : winner_name, "loser_id" : loser_id, 
-// “loser_name” : loser_name, "winner_score" : winner_score, "loser_score" : loser_score, "points_exchanged": points_exchanged}, ... ], 
-// "ratings" : [ { "pid" : player_id, "pname" : player_name, "rating_before" : rating_before, 
+// returns { "matches" : [ { "winner_id" : winner_id, "winner_name" : winner_name, "loser_id" : loser_id,
+// “loser_name” : loser_name, "winner_score" : winner_score, "loser_score" : loser_score, "points_exchanged": points_exchanged}, ... ],
+// "ratings" : [ { "pid" : player_id, "pname" : player_name, "rating_before" : rating_before,
 // "rating_after" : rating_after }, ... ], “ename”: event_name, “edate”: event_date }
 app.get('/api/event/:event_id', (req, res) => {
     let result = {"matches" : [], "ratings" : [], "ename" : "", "edate" : ""};
-    
+
     // adding the event name and date to the result
     pool.query(`select event_name, event_date from events where event_id=${req.params.event_id}`, (err,results) => {
         if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
@@ -122,15 +124,15 @@ app.get('/api/event/:event_id', (req, res) => {
         f record;
     begin
         for f in (with players (pid, pname) as (
-            select distinct player_id,player_name 
+            select distinct player_id,player_name
             from (
-                select r.player_name, r.player_id,m.winner_id, m.loser_id 
-                from ratings r join matches m 
+                select r.player_name, r.player_id,m.winner_id, m.loser_id
+                from ratings r join matches m
                 on r.player_id=m.winner_id or r.player_id=m.loser_id
                 where m.event_id=${req.params.event_id}
             ) as temp
-        ) select pid,pname from players order by pid asc) 
-        loop 
+        ) select pid,pname from players order by pid asc)
+        loop
             insert into temp select f.pid, f.pname, coalesce((select sum(rating_diff) from matches m where winner_id=f.pid and m.event_id<${req.params.event_id}),0) - coalesce((select sum(rating_diff) from matches m where loser_id=f.pid and m.event_id<${req.params.event_id}),0) as rating_before, coalesce((select sum(rating_diff) from matches m where winner_id=f.pid and m.event_id<=${req.params.event_id}),0) - coalesce((select sum(rating_diff) from matches m where loser_id=f.pid and m.event_id<=${req.params.event_id}),0) as rating_after;
         end loop;
     end;
@@ -140,7 +142,7 @@ app.get('/api/event/:event_id', (req, res) => {
         result["ratings"] = results[3].rows;
         // console.log(err);
         // console.log(results.rows);
-        res.status(200).json(result);        
+        res.status(200).json(result);
     });
     // console.log(result);
 

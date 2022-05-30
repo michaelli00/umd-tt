@@ -7,3 +7,8 @@ h1 {
   text-align: center;
   padding-bottom: 10px;
 }
+
+.react-loading {
+  display: grid;
+  margin: auto;
+}
