@@ -34,7 +34,7 @@ insert into ratings (player_name, rating, active) values
     ('yash', 2400, TRUE), ('michael', 300, TRUE), ('chris', 400, FALSE), ('jamie', 1600, TRUE);
 
 insert into events (event_name,event_date) values
-    ('test1','2022-01-01'), ('test2','2022-03-03');
+    ('test1','2022-01-01'), ('test2','2022-03-03'), ('test1-2','2022-01-01');
 
 insert into matches values 
     (1,1,2,3,0,2), (1,1,3,3,0,5), (1,2,3,4,1,9), (1,4,1,3,2,8);

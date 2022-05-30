@@ -24,7 +24,7 @@ app.get('/api/players', (req, res) => {
 });
 
 // returns all the information for a single player given the player id
-// returns { "pid" : player_ID, "pname" : player_name, "pr" : rating, "active": active, events : [{ "eid" : event_id, "ename" : event_name, "rating_before" : rating_before, "rating_after" : rating_after }, ... ] }
+// returns { "pid" : player_ID, "pname" : player_name, "pr" : rating, "active": active, events : [{ "eid" : event_id, "ename" : event_name, "edate" : event_date, "rating_before" : rating_before, "rating_after" : rating_after }, ... ] }
 app.get('/api/player/:id', (req, res) => {
     let result = {"pid": -1, "pname": "", "pr":-1, "events":[]}
     // getting the name, id and current rating
@@ -39,23 +39,27 @@ app.get('/api/player/:id', (req, res) => {
     // getting event information
     //
     pool.query(`drop table if exists temp;
-    create temporary table temp (eid integer,ename varchar(255),rating_before integer,rating_after integer);
+    create temporary table temp (eid integer,ename varchar(255),edate varchar(10),rating_before integer,rating_after integer);
     do
     $$
     declare
         f record;
     begin
-        for f in (with events (eid, ename) as (
-            select distinct event_id,event_name
-            from (
-                select e.event_name, e.event_id,m.winner_id, m.loser_id
-                from events e join matches m
-                on m.winner_id=${req.params.id} or m.loser_id=${req.params.id}
-                where e.event_id in (select distinct event_id from matches)
-            ) as temp
-        ) select eid,ename from events order by eid asc)
-        loop
-            insert into temp select f.eid, f.ename, coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<f.eid),0) as rating_before, coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<=f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<=f.eid),0) as rating_after;
+
+        for f in (
+            with events (eid, ename, edate) as (
+                select distinct event_id,event_name,event_date
+                from (
+                    select e.event_name, e.event_id,e.event_date,m.winner_id, m.loser_id 
+                    from events e join matches m 
+                    on m.winner_id=${req.params.id} or m.loser_id=${req.params.id}
+                    where e.event_id in (select distinct event_id from matches)
+                ) as temp
+            ) select eid,ename,edate from events order by eid asc
+        ) 
+        loop 
+            insert into temp select f.eid, f.ename,f.edate,coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<f.eid),0) as rating_before, coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<=f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<=f.eid),0) as rating_after;
+
         end loop;
     end;
     $$;
@@ -86,6 +90,28 @@ app.get('/api/dates', (req, res) => {
         res.status(200).json(result)
     });
 });
+
+
+// returns all events group by date
+// returns { "all_events" : [ { "date" : event_date, "events" : [ "eid" : event_id, "ename" : event_name ] } ] }
+app.get('/api/events', (req, res) => {
+    pool.query("select event_date, array_agg(event_id) as ids, array_agg(event_name) as names from events group by event_date order by event_date", (err,results) => {
+        // console.log("results:\n"+JSON.stringify(results.rows)+"\n");
+        if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
+        let result = {"all_events": []}
+        if (results) {
+            for (let row of results.rows) {
+                // console.log(JSON.stringify(row["event_date"]));
+                result["all_events"].push({ 
+                    "date" : (row["event_date"].toISOString()).split("T")[0], 
+                    "events" : row["ids"].map((e,i) => ({"eid" : e,"ename" : row["names"][i]}))
+                });
+            }
+        }
+        res.status(200).json(result)
+    });
+});
+
 
 // returns all the information for a specific event given event id
 // returns { "matches" : [ { "winner_id" : winner_id, "winner_name" : winner_name, "loser_id" : loser_id,
@@ -147,6 +173,97 @@ app.get('/api/event/:event_id', (req, res) => {
     // console.log(result);
 
     // res.status(200).json(result);
+});
+
+
+// add new players to the database so they can be selected for matches
+// { "list" : [ { "pname" : player_name, "init_rating" : initial_rating }, ... ] }
+app.post('/api/admin/new_players', (req,res) => {
+    // console.log(req.body);
+
+    let s = ""
+    for (let player of req.body["list"]) {
+        s += "(DEFAULT,'"+player["pname"]+"',"+player["init_rating"]+",TRUE), ";
+    }
+    console.log(s);
+    pool.query(`insert into ratings values ${s.substring(0,s.length-2)}`, (err,results) => {console.log(err+"\n\n"+results)})
+
+    res.json("insert success");
+});
+
+
+// update players' info
+// { "list" : [ { "pid" : player_id, "pname" : player_name, "new_rating" : initial_rating, "active" : active }, ... ] }
+app.post('/api/admin/update_players', (req,res) => {
+    // console.log(req.body);
+
+    let s = ""
+    for (let player of req.body["list"]) {
+        s += `(${player['pid']}, '${player['pname']}', ${player['new_rating']}, ${player['active']}), `;
+    }
+    console.log(s);
+    pool.query(`
+    update ratings as r set
+        player_name = r2.pname,
+        rating = r2.new_rating,
+        active = r2.active
+    from (values
+        ${s.substring(0,s.length-2)}
+    ) as r2 (pid,pname,new_rating,active)
+    where r.player_id=r2.pid
+    `, (err,results) => {console.log(err+"\n\n"+results)})
+
+    res.json("update success");
+});
+
+
+// takes { "edate" : event_date, "ename" : event_name, 
+//   “matches” : [ { "winner_id" : winner_id, "loser_id" : loser_id, 
+//   "winner_score" : winner_score, "loser_score" : loser_score }, ... ] } 
+// calculates the new ratings and updates the database
+app.post('/api/admin/', async (req,res) => {
+    // console.log(req.body);
+    let event = { "event_id" : -1, "matches" : "", "ratings" : "" };
+    // adding event name and date to the events table
+    let results = await pool.query(`insert into events (event_name,event_date) values ('${req.body['ename']}','${req.body['edate']}'); select max(event_id) as m from events;` /*, (err,results) => {
+        // if (err) { /*console.log("hey there was an error: \n" + err);* res.status(500).send("something went wrong"); return;}
+        // console.log("\n\n"+err+"\n\n"+results);
+        // event.event_id = await results[1].rows[0]['m'];
+        // console.log(event);
+    }*/);
+    event.event_id = await results[1].rows[0]['m'];
+    
+    for (let match of req.body['matches']) {
+        results = await pool.query(`select rating from ratings where player_id=${match['winner_id']};
+                    select rating from ratings where player_id=${match['loser_id']};`)//, async (err,results) => {
+            // if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
+        let wr = parseInt(results[0].rows[0]['rating'])
+        let lr = parseInt(results[1].rows[0]['rating'])
+        let pts_ex = get_points_exchanged(wr,lr,1);
+        // console.log(wr,lr,pts_ex)
+        // console.log(event)
+        // add all the info as another row in the matches array
+        event.matches += `(${event.event_id}, ${match['winner_id']}, ${match['loser_id']}, ${match['winner_score']}, ${match['loser_score']}, ${pts_ex}), `;
+
+        // update both players' ratings in the ratings_arr array
+        event.ratings += `(${match['winner_id']}, ${wr+pts_ex}), (${match['loser_id']}, ${wr+pts_ex}), `
+        
+    }
+    // console.log(`insert into matches values ${event.matches.substring(0,event.matches.length-2)}`)
+    results = await pool.query(`insert into matches values ${event.matches.substring(0,event.matches.length-2)}`) //,(err,results) => {
+    // console.log(results);
+    // });
+
+    results = await pool.query(`
+    update ratings as r set
+        rating = r2.new_rating
+    from (values
+        ${event.ratings.substring(0,event.ratings.length-2)}
+    ) as r2 (pid,new_rating)
+    where r.player_id=r2.pid
+    `)//, (err,results) => {console.log(err+"\n\n"+results)})
+    
+    res.send(req.body);
 });
 
 /////////////////////////////
