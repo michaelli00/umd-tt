@@ -149,7 +149,7 @@ app.get('/api/event/:event_id', (req, res) => {
 
 
 // add new players to the database so they can be selected for matches
-// { "list" : [ { "pname" : player_name, "init_rating" : initial_rating }, … ] }
+// { "list" : [ { "pname" : player_name, "init_rating" : initial_rating }, ... ] }
 app.post('/api/admin/new_players', (req,res) => {
     // console.log(req.body);
 
@@ -161,6 +161,31 @@ app.post('/api/admin/new_players', (req,res) => {
     pool.query(`insert into ratings values ${s.substring(0,s.length-2)}`, (err,results) => {console.log(err+"\n\n"+results)})
 
     res.json("insert success");
+});
+
+
+// update players' info
+// { "list" : [ { "pid" : player_id, "pname" : player_name, "new_rating" : initial_rating, "active" : active }, ... ] }
+app.post('/api/admin/update_players', (req,res) => {
+    // console.log(req.body);
+
+    let s = ""
+    for (let player of req.body["list"]) {
+        s += `(${player['pid']}, '${player['pname']}', ${player['new_rating']}, ${player['active']}), `;
+    }
+    console.log(s);
+    pool.query(`
+    update ratings as r set
+        player_name = r2.pname,
+        rating = r2.new_rating,
+        active = r2.active
+    from (values
+        ${s.substring(0,s.length-2)}
+    ) as r2 (pid,pname,new_rating,active)
+    where r.player_id=r2.pid
+    `, (err,results) => {console.log(err+"\n\n"+results)})
+
+    res.json("update success");
 });
 
 
