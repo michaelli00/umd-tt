@@ -217,30 +217,48 @@ app.post('/api/admin/update_players', (req,res) => {
 //   “matches” : [ { "winner_id" : winner_id, "loser_id" : loser_id, 
 //   "winner_score" : winner_score, "loser_score" : loser_score }, ... ] } 
 // calculates the new ratings and updates the database
-app.post('/api/admin/', (req,res) => {
+app.post('/api/admin/', async (req,res) => {
     // console.log(req.body);
-
+    let event = { "event_id" : -1, "matches" : "", "ratings" : "" };
     // adding event name and date to the events table
-    pool.query(`insert into events (event_name,event_date) values (${req.body['ename']},${req.body['edate']})`, (err,results) => {
-        // if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
-    });
-
+    let results = await pool.query(`insert into events (event_name,event_date) values ('${req.body['ename']}','${req.body['edate']}'); select max(event_id) as m from events;` /*, (err,results) => {
+        // if (err) { /*console.log("hey there was an error: \n" + err);* res.status(500).send("something went wrong"); return;}
+        // console.log("\n\n"+err+"\n\n"+results);
+        // event.event_id = await results[1].rows[0]['m'];
+        // console.log(event);
+    }*/);
+    event.event_id = await results[1].rows[0]['m'];
+    
     for (let match of req.body['matches']) {
-        pool.query(`select rating from ratings where player_id=${match['winner_id']};
-                    select ratinh from ratings where player_id=${match['loser_id']};`, (err,results) => {
-                        // if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
-                        let wr = parseInt(results[0].rows['rating'])
-                        let lr = parseInt(results[1].rows['rating'])
-                        let pts_ex = get_points_exchanged(wr,lr,1);
+        results = await pool.query(`select rating from ratings where player_id=${match['winner_id']};
+                    select rating from ratings where player_id=${match['loser_id']};`)//, async (err,results) => {
+            // if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
+        let wr = parseInt(results[0].rows[0]['rating'])
+        let lr = parseInt(results[1].rows[0]['rating'])
+        let pts_ex = get_points_exchanged(wr,lr,1);
+        // console.log(wr,lr,pts_ex)
+        // console.log(event)
+        // add all the info as another row in the matches array
+        event.matches += `(${event.event_id}, ${match['winner_id']}, ${match['loser_id']}, ${match['winner_score']}, ${match['loser_score']}, ${pts_ex}), `;
 
-                        // add all the info as another row in the matches table
-                        
-
-                        // update both players' ratings in the ratings table
-
-                    });
+        // update both players' ratings in the ratings_arr array
+        event.ratings += `(${match['winner_id']}, ${wr+pts_ex}), (${match['loser_id']}, ${wr+pts_ex}), `
+        
     }
+    // console.log(`insert into matches values ${event.matches.substring(0,event.matches.length-2)}`)
+    results = await pool.query(`insert into matches values ${event.matches.substring(0,event.matches.length-2)}`) //,(err,results) => {
+    // console.log(results);
+    // });
 
+    results = await pool.query(`
+    update ratings as r set
+        rating = r2.new_rating
+    from (values
+        ${event.ratings.substring(0,event.ratings.length-2)}
+    ) as r2 (pid,new_rating)
+    where r.player_id=r2.pid
+    `)//, (err,results) => {console.log(err+"\n\n"+results)})
+    
     res.send(req.body);
 });
 
