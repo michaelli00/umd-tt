@@ -1,0 +1,22 @@
+.LeagueList {
+  margin-top: 20px;
+}
+
+h1 {
+  text-align: center;
+  padding-bottom: 10px;
+}
+
+.event-name {
+  padding-right: 15px;
+  display: inline-block;
+}
+
+.submit-league-results {
+  float: right;
+  padding-bottom: 30px;
+}
+
+.table {
+  border-color: black !important;
+}

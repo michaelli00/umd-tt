@@ -3,6 +3,7 @@ import Table from 'react-bootstrap/Table';
 import {
   Link,
 } from "react-router-dom";
+import './LeagueList.css';
 
 function LeagueList() {
   const data = [
@@ -47,7 +48,8 @@ function LeagueList() {
   ];
 
   return (
-    <Container>
+    <Container className="LeagueList">
+      <h1>List of Previous Leagues</h1>
       <Table striped bordered hover size="sm">
         <thead>
           <tr>
@@ -60,7 +62,7 @@ function LeagueList() {
             <tr key={datum.events[0].id}>
               <td>{datum.date}</td>
               <td>{datum.events.map(event =>
-                <Link to={`/event/${event.id}`} key={event.id}>{event.name}</Link>)}
+                <Link to={`/event/${event.id}`} key={event.id}><span className="event-name">{event.name}</span></Link>)}
             </td>
             </tr>
           )}
