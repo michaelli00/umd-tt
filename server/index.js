@@ -147,6 +147,54 @@ app.get('/api/event/:event_id', (req, res) => {
     // res.status(200).json(result);
 });
 
+
+// add new players to the database so they can be selected for matches
+// { "list" : [ { "pname" : player_name, "init_rating" : initial_rating }, … ] }
+app.post('/api/admin/new_players', (req,res) => {
+    // console.log(req.body);
+
+    let s = ""
+    for (let player of req.body["list"]) {
+        s += "(DEFAULT,'"+player["pname"]+"',"+player["init_rating"]+",TRUE), ";
+    }
+    console.log(s);
+    pool.query(`insert into ratings values ${s.substring(0,s.length-2)}`, (err,results) => {console.log(err+"\n\n"+results)})
+
+    res.json("insert success");
+});
+
+
+// takes { "edate" : event_date, "ename" : event_name, 
+//   “matches” : [ { "winner_id" : winner_id, "loser_id" : loser_id, 
+//   "winner_score" : winner_score, "loser_score" : loser_score }, ... ] } 
+// calculates the new ratings and updates the database
+app.post('/api/admin/', (req,res) => {
+    // console.log(req.body);
+
+    // adding event name and date to the events table
+    pool.query(`insert into events (event_name,event_date) values (${req.body['ename']},${req.body['edate']})`, (err,results) => {
+        // if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
+    });
+
+    for (let match of req.body['matches']) {
+        pool.query(`select rating from ratings where player_id=${match['winner_id']};
+                    select ratinh from ratings where player_id=${match['loser_id']};`, (err,results) => {
+                        // if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
+                        let wr = parseInt(results[0].rows['rating'])
+                        let lr = parseInt(results[1].rows['rating'])
+                        let pts_ex = get_points_exchanged(wr,lr,1);
+
+                        // add all the info as another row in the matches table
+                        
+
+                        // update both players' ratings in the ratings table
+
+                    });
+    }
+
+    res.send(req.body);
+});
+
 /////////////////////////////
 
 app.listen(5000, () => {
