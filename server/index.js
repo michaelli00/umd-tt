@@ -43,15 +43,17 @@ app.get('/api/player/:id', (req, res) => {
     declare
         f record;
     begin
-        for f in (with events (eid, ename) as (
-            select distinct event_id,event_name 
-            from (
-                select e.event_name, e.event_id,m.winner_id, m.loser_id 
-                from events e join matches m 
-                on m.winner_id=${req.params.id} or m.loser_id=${req.params.id}
-                where e.event_id in (select distinct event_id from matches)
-            ) as temp
-        ) select eid,ename from events order by eid asc) 
+        for f in (
+            with events (eid, ename, edate) as (
+                select distinct event_id,event_name,event_date
+                from (
+                    select e.event_name, e.event_id,e.event_date,m.winner_id, m.loser_id 
+                    from events e join matches m 
+                    on m.winner_id=${req.params.id} or m.loser_id=${req.params.id}
+                    where e.event_id in (select distinct event_id from matches)
+                ) as temp
+            ) select eid,ename,edate from events order by eid asc
+        ) 
         loop 
             insert into temp select f.eid, f.ename, coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<f.eid),0) as rating_before, coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<=f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<=f.eid),0) as rating_after;
         end loop;
@@ -84,6 +86,28 @@ app.get('/api/dates', (req, res) => {
         res.status(200).json(result)
     });
 });
+
+
+// returns all events group by date
+// returns { "all_events" : [ { "date" : event_date, "events" : [ "eid" : event_id, "ename" : event_name ] } ] }
+app.get('/api/events', (req, res) => {
+    pool.query("select event_date, array_agg(event_id) as ids, array_agg(event_name) as names from events group by event_date order by event_date", (err,results) => {
+        // console.log("results:\n"+JSON.stringify(results.rows)+"\n");
+        if (err) { /*console.log("hey there was an error: \n" + err);*/ res.status(500).send("something went wrong"); return;}
+        let result = {"all_events": []}
+        if (results) {
+            for (let row of results.rows) {
+                // console.log(JSON.stringify(row["event_date"]));
+                result["all_events"].push({ 
+                    "date" : (row["event_date"].toISOString()).split("T")[0], 
+                    "events" : row["ids"].map((e,i) => ({"eid" : e,"ename" : row["names"][i]}))
+                });
+            }
+        }
+        res.status(200).json(result)
+    });
+});
+
 
 // returns all the information for a specific event given event id
 // returns { "matches" : [ { "winner_id" : winner_id, "winner_name" : winner_name, "loser_id" : loser_id, 
