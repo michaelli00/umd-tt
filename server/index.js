@@ -22,7 +22,7 @@ app.get('/api/players', (req, res) => {
 });
 
 // returns all the information for a single player given the player id
-// returns { "pid" : player_ID, "pname" : player_name, "pr" : rating, "active": active, events : [{ "eid" : event_id, "ename" : event_name, "rating_before" : rating_before, "rating_after" : rating_after }, ... ] }
+// returns { "pid" : player_ID, "pname" : player_name, "pr" : rating, "active": active, events : [{ "eid" : event_id, "ename" : event_name, "edate" : event_date, "rating_before" : rating_before, "rating_after" : rating_after }, ... ] }
 app.get('/api/player/:id', (req, res) => {
     let result = {"pid": -1, "pname": "", "pr":-1, "events":[]}
     // getting the name, id and current rating
@@ -37,7 +37,7 @@ app.get('/api/player/:id', (req, res) => {
     // getting event information
     // 
     pool.query(`drop table if exists temp;
-    create temporary table temp (eid integer,ename varchar(255),rating_before integer,rating_after integer);
+    create temporary table temp (eid integer,ename varchar(255),edate varchar(10),rating_before integer,rating_after integer);
     do
     $$
     declare
@@ -55,7 +55,7 @@ app.get('/api/player/:id', (req, res) => {
             ) select eid,ename,edate from events order by eid asc
         ) 
         loop 
-            insert into temp select f.eid, f.ename, coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<f.eid),0) as rating_before, coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<=f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<=f.eid),0) as rating_after;
+            insert into temp select f.eid, f.ename,f.edate,coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<f.eid),0) as rating_before, coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<=f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<=f.eid),0) as rating_after;
         end loop;
     end;
     $$;
