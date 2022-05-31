@@ -10,42 +10,34 @@ import {
   Link,
 } from "react-router-dom";
 import {
+  fetchEvents,
+  fetchEventInfo,
   fetchPlayers,
+  formatDate,
+  formatMatchResults,
 } from '../../utils/Utils';
 import './AdminPage.css';
 
-function AdminList() {
-  const [adminValidated, setAdminValidated] = useState(false);
-  const [showResultsForm, setShowResultsForm] = useState(false);
-  const [showAddPlayerForm, setShowAddPlayerForm] = useState(false);
-  const [selectedPlayersInGroup, setSelectedPlayersInGroup] = useState([]);
-  const [players, setPlayers] = useState([]);
+function AdminPage() {
+  const [adminValidated, setAdminValidated] = useState(true);
+  const [eventInfo, setEventInfo] = useState({});
+  const [leagueList, setLeagueList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [events, setEvents] = useState([]);
+  const [players, setPlayers] = useState([]);
+  const [selectedPlayersInGroup, setSelectedPlayersInGroup] = useState([]);
+  const [showAddPlayerForm, setShowAddPlayerForm] = useState(false);
+  const [showResultsForm, setShowResultsForm] = useState(false);
+  const [showUpdatePlayerForm, setShowUpdatePlayerForm] = useState(false);
 
   useEffect(() => {
-    let loadPlayerData = async () => {
+    let loadAdminPageData = async () => {
       setPlayers(await fetchPlayers());
+      setLeagueList(await fetchEvents());
+      setLoading(false);
     }
 
-    loadPlayerData();
-    setLoading(false);
+    loadAdminPageData();
   }, []);
-
-  const playerList = [
-    {
-      id: 1,
-      name: "Michael",
-      rating: 2000,
-      active: false,
-    },
-    {
-      id: 2,
-      name: "Yash",
-      rating: 1000,
-      active: true,
-    }
-  ];
 
   const onSignIn = event => {
     event.preventDefault();
@@ -81,7 +73,21 @@ function AdminList() {
 
   const onCloseResultsForm = () => {
     setShowResultsForm(false);
+    setEventInfo({});
     setSelectedPlayersInGroup([]);
+  }
+
+  const onClickOldEventResults = async eid => {
+    const eventInfo = await fetchEventInfo(eid);
+    const playersObj = {};
+    eventInfo.matches.forEach(match => {
+      playersObj[match.winner_id] = match.winner_name;
+      playersObj[match.loser_id] = match.loser_name;
+    })
+    const selectedPlayers = Object.keys(playersObj).map(pid => ({pid: pid, pname: playersObj[pid]}));
+    setEventInfo(eventInfo);
+    setSelectedPlayersInGroup(selectedPlayers);
+    setShowResultsForm(true);
   }
 
   const onSubmitResultsForm = event => {
@@ -95,61 +101,19 @@ function AdminList() {
 
   const renderMatchResultsForm = players => {
     const playerMatchPairs = players.map((player1, index) => players.slice(index + 1).map(player2 => [player1, player2])).flat();
-    return playerMatchPairs.map((pair, index) =>
-      <Form.Group controlId={`formBasicPair${index}`} className="admin-form" key={index}>
-        <Form.Label>
-          <h5>{pair[0].name} vs. {pair[1].name}</h5>
-        </Form.Label>
-      <Form.Control type="input" placeholder="0-3"/>
-      </Form.Group>);
-  }
-
-  const eventList = [
-    {
-      id: 1,
-      date: '5/22/2022',
-      name: 'Group 1',
-    },
-    {
-      id: 2,
-      date: '5/22/2022',
-      name: 'Group 2',
-    },
-    {
-      id: 3,
-      date: '5/22/2022',
-      name: 'Group 3',
-    },
-    {
-      id: 4,
-      date: '5/22/2022',
-      name: 'Group 4',
-    },
-    {
-      id: 5,
-      date: '5/21/2022',
-      name: 'Group 1',
-    },
-    {
-      id: 6,
-      date: '5/21/2022',
-      name: 'Group 2',
-    },
-    {
-      id: 7,
-      date: '5/21/2022',
-      name: 'Group 3',
-    },
-  ];
-
-  const eventIndicesWithDifferentDates = [];
-  let currEventDate = "";
-  eventList.forEach((event, index) => {
-    if (event.date !== currEventDate) {
-      currEventDate = event.date;
-      eventIndicesWithDifferentDates.push(index);
+    const formattedMatchResults = formatMatchResults(eventInfo.matches);
+    return playerMatchPairs.map((pair, index) => {
+      const matchScore = formattedMatchResults[pair[0].pid][pair[1].pid];
+      return (
+        <Form.Group controlId={`formBasicPair${index}`} className="admin-form" key={index}>
+          <Form.Label>
+            <h5>{pair[0].pname} vs. {pair[1].pname}</h5>
+          </Form.Label>
+        <Form.Control type="input" placeholder="0-3" defaultValue={matchScore}/>
+        </Form.Group>
+      );
     }
-  });
+  )};
 
   return (
     <Container className="AdminPage">
@@ -195,17 +159,17 @@ function AdminList() {
                 <Modal.Body>
                   <Form.Group controlId="formBasicName" className="admin-form">
                     <Form.Label><h5>Event Name</h5></Form.Label>
-                    <Form.Control type="input" placeholder="Name"/>
+                    <Form.Control type="input" placeholder="Name" defaultValue={eventInfo.ename}/>
                   </Form.Group>
                   <br/>
                   <Form.Group controlId="formBasicSelectPlayers" className="admin-form">
                     <Form.Label><h5>Select Players</h5></Form.Label>
                     <Multiselect
-                      options={players.map(player => {return {name: player.pname, id: player.pid}})}
-                      selectedVluaes={selectedPlayersInGroup}
+                      options={players.map(player => {return {pname: player.pname, pid: player.pid}})}
+                      selectedValues={selectedPlayersInGroup}
                       onSelect={onChangeSelectedGroupPlayers}
                       onRemove={onChangeSelectedGroupPlayers}
-                      displayValue="name"
+                      displayValue="pname"
                     />
                   </Form.Group>
                   <br/>
@@ -237,6 +201,7 @@ function AdminList() {
                     <th>Player Name</th>
                     <th>Rating</th>
                     <th>Active/Inactive</th>
+                    <th>Change Player Info</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -244,7 +209,8 @@ function AdminList() {
                     <tr key={player.pid}>
                       <td><Link to = {`/player/${player.id}`}>{player.pname}</Link></td>
                       <td>{player.pr}</td>
-                      <td><Button>{player.active ? 'Active' : 'Inactive'}</Button></td>
+                      <td>{player.active ? 'Active' : 'Inactive'}</td>
+                      <td><Button>Change</Button></td>
                     </tr>
                   )}
                 </tbody>
@@ -265,11 +231,15 @@ function AdminList() {
                   </tr>
                 </thead>
                 <tbody>
-                  {eventList.map((datum, index) =>
-                    <tr key={datum.id}>
-                      {eventIndicesWithDifferentDates.includes(index) ? <td>{datum.date}</td> : <td></td>}
-                      <td><Link to={`/event/${datum.id}`}>{datum.name}</Link></td>
-                      <td><Button>Change Results</Button></td>
+                  {leagueList.map(league =>
+                    <tr key={league.events[0].eid}>
+                      {league.events.map((event, index) =>
+                        <React.Fragment key={event.eid}>
+                          {index === 0 ? <td>{formatDate(league.date)}</td> : <td></td>}
+                          <td><Link to={`/event/${event.eid}`}>{event.ename}</Link></td>
+                          <td><Button onClick={() => onClickOldEventResults(event.eid)}>Change Results</Button></td>
+                        </React.Fragment>
+                      )}
                     </tr>
                   )}
                 </tbody>
@@ -295,4 +265,4 @@ function AdminList() {
   );
 }
 
-export default AdminList;
+export default AdminPage;

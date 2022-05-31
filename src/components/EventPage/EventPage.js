@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import {
   fetchEventInfo,
+  formatDate,
 } from '../../utils/Utils';
 import './EventPage.css';
 
@@ -24,14 +25,11 @@ function EventPage() {
     loadEventInfo();
   }, []);
 
-  const eventDate = new Date(eventInfo.edate);
-  const eventDateString = `${eventDate.getMonth() + 1}/${eventDate.getDate()}/${eventDate.getFullYear()}`;
-
   return (
     <Container className="EventPage">
       {!loading ?
         <React.Fragment>
-          <h1>{`${eventDateString} ${eventInfo.ename}`}</h1>
+          <h1>{`${formatDate(eventInfo.edate)} ${eventInfo.ename}`}</h1>
           <br/>
           <h1>Matches</h1>
           <Table striped bordered hover size="sm">

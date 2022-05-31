@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import {
   fetchPlayerInfo,
+  formatDate,
 } from '../../utils/Utils';
 import './PlayerProfile.css';
 
@@ -47,8 +48,8 @@ function PlayerProfile() {
             <tbody>
               {playerInfo.events.map(eventInfo =>
                 <tr key={eventInfo.eid}>
-                  <td>DATE</td>
-                  <td><Link to = {`/event/${eventInfo.pid}`}>{eventInfo.ename}</Link></td>
+                  <td>{formatDate(eventInfo.edate)}</td>
+                  <td><Link to = {`/event/${eventInfo.eid}`}>{eventInfo.ename}</Link></td>
                   <td>{eventInfo.rating_before}</td>
                   <td>{eventInfo.rating_after}</td>
                 </tr>

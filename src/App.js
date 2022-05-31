@@ -41,7 +41,7 @@ function App() {
           <Route path="/event/*" element={<EventPage/>}/>
           <Route path="/leagues" element={<LeagueList/>}/>
           <Route path="/player/*" element={<PlayerProfile/>}/>
-          <Route path="/*" element={() => <Navigate to="/"/>}/>
+          <Route path="/*" element={<Navigate to="/"/>}/>
         </Routes>
       </Router>
     </div>
