@@ -1,5 +1,5 @@
 import Container from 'react-bootstrap/Container';
-import Navbar from 'react-bootstrap/NavBar';
+import { Navbar } from 'react-bootstrap';   // Navbar needs to be imported like this way, was causing build issues otherwise
 import Nav from 'react-bootstrap/Nav';
 import {
   BrowserRouter as Router,

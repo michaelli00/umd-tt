@@ -19,7 +19,7 @@ import {
 import './AdminPage.css';
 
 function AdminPage() {
-  const [adminValidated, setAdminValidated] = useState(true);
+  const [adminValidated, setAdminValidated] = useState(false);
   const [eventInfo, setEventInfo] = useState({});
   const [leagueList, setLeagueList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -114,6 +114,18 @@ function AdminPage() {
       );
     }
   )};
+
+  const flatLeagueList = [];
+  leagueList.forEach(league =>
+    flatLeagueList.push.apply(flatLeagueList, league.events.map((event, index) =>
+      ({
+        date: league.date,
+        eid: event.eid,
+        ename: event.ename,
+        diffDate: index === 0 ? true : false,
+      })
+    ))
+  );
 
   return (
     <Container className="AdminPage">
@@ -231,15 +243,11 @@ function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {leagueList.map(league =>
-                    <tr key={league.events[0].eid}>
-                      {league.events.map((event, index) =>
-                        <React.Fragment key={event.eid}>
-                          {index === 0 ? <td>{formatDate(league.date)}</td> : <td></td>}
-                          <td><Link to={`/event/${event.eid}`}>{event.ename}</Link></td>
-                          <td><Button onClick={() => onClickOldEventResults(event.eid)}>Change Results</Button></td>
-                        </React.Fragment>
-                      )}
+                  {flatLeagueList.map(event =>
+                    <tr key={event.eid}>
+                        {event.diffDate ? <td>{formatDate(event.date)}</td> : <td></td>}
+                        <td><Link to={`/event/${event.eid}`}>{event.ename}</Link></td>
+                        <td><Button onClick={() => onClickOldEventResults(event.eid)}>Change Results</Button></td>
                     </tr>
                   )}
                 </tbody>

@@ -5,10 +5,12 @@ const path = require('path')
 const pool = require('./db');
 const get_points_exchanged = require('./rating_algo');
 
+const port = process.env.PORT || 5000;
+
 // middleware
+app.use(express.static(path.join(__dirname, '../build')));
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.resolve(__dirname, '../build')));
 
 // routes
 
@@ -50,14 +52,14 @@ app.get('/api/player/:id', (req, res) => {
             with events (eid, ename, edate) as (
                 select distinct event_id,event_name,event_date
                 from (
-                    select e.event_name, e.event_id,e.event_date,m.winner_id, m.loser_id 
-                    from events e join matches m 
+                    select e.event_name, e.event_id,e.event_date,m.winner_id, m.loser_id
+                    from events e join matches m
                     on m.winner_id=${req.params.id} or m.loser_id=${req.params.id}
                     where e.event_id in (select distinct event_id from matches)
                 ) as temp
             ) select eid,ename,edate from events order by eid asc
-        ) 
-        loop 
+        )
+        loop
             insert into temp select f.eid, f.ename,f.edate,coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<f.eid),0) as rating_before, coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<=f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<=f.eid),0) as rating_after;
 
         end loop;
@@ -102,8 +104,8 @@ app.get('/api/events', (req, res) => {
         if (results) {
             for (let row of results.rows) {
                 // console.log(JSON.stringify(row["event_date"]));
-                result["all_events"].push({ 
-                    "date" : (row["event_date"].toISOString()).split("T")[0], 
+                result["all_events"].push({
+                    "date" : (row["event_date"].toISOString()).split("T")[0],
                     "events" : row["ids"].map((e,i) => ({"eid" : e,"ename" : row["names"][i]}))
                 });
             }
@@ -217,9 +219,9 @@ app.post('/api/admin/update_players', (req,res) => {
 });
 
 
-// takes { "edate" : event_date, "ename" : event_name, 
-//   “matches” : [ { "winner_id" : winner_id, "loser_id" : loser_id, 
-//   "winner_score" : winner_score, "loser_score" : loser_score }, ... ] } 
+// takes { "edate" : event_date, "ename" : event_name,
+//   “matches” : [ { "winner_id" : winner_id, "loser_id" : loser_id,
+//   "winner_score" : winner_score, "loser_score" : loser_score }, ... ] }
 // calculates the new ratings and updates the database
 app.post('/api/admin/', async (req,res) => {
     // console.log(req.body);
@@ -232,7 +234,7 @@ app.post('/api/admin/', async (req,res) => {
         // console.log(event);
     }*/);
     event.event_id = await results[1].rows[0]['m'];
-    
+
     for (let match of req.body['matches']) {
         results = await pool.query(`select rating from ratings where player_id=${match['winner_id']};
                     select rating from ratings where player_id=${match['loser_id']};`)//, async (err,results) => {
@@ -247,7 +249,7 @@ app.post('/api/admin/', async (req,res) => {
 
         // update both players' ratings in the ratings_arr array
         event.ratings += `(${match['winner_id']}, ${wr+pts_ex}), (${match['loser_id']}, ${wr+pts_ex}), `
-        
+
     }
     // console.log(`insert into matches values ${event.matches.substring(0,event.matches.length-2)}`)
     results = await pool.query(`insert into matches values ${event.matches.substring(0,event.matches.length-2)}`) //,(err,results) => {
@@ -262,13 +264,18 @@ app.post('/api/admin/', async (req,res) => {
     ) as r2 (pid,new_rating)
     where r.player_id=r2.pid
     `)//, (err,results) => {console.log(err+"\n\n"+results)})
-    
+
     res.send(req.body);
 });
 
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, "../build/index.html"));
+});
+
+
 /////////////////////////////
 
-app.listen(5000, () => {
-    console.log('server started on port 5000');
+app.listen(port, () => {
+    console.log(`server started on port ${port}`);
 });
 
