@@ -1,82 +1,83 @@
+import React, { useEffect, useState } from 'react';
 import Container from 'react-bootstrap/Container';
 import Table from 'react-bootstrap/Table';
+import ReactLoading from 'react-loading';
 import {
   Link,
 } from "react-router-dom";
+import {
+  fetchEventInfo,
+} from '../../utils/Utils';
+import './EventPage.css';
 
 function EventPage() {
-  const data = {
-    name: '5/22/22 Group 1',
-    date: '5/22/22',
-    matches: [
-      {
-        winner_id: 2,
-        winner_name: 'Yash',
-        winner_score: 3,
-        loser_id: 1,
-        loser_name: 'Michael',
-        loser_score: 0,
-        rating_change: 20,
-      }
-    ],
-    ratings: [
-      {
-        id: 1,
-        name: 'Michael',
-        rating_before: 2000,
-        rating_after: 1980,
-      },
-      {
-        id: 2,
-        name: 'Yash',
-        rating_before: 1000,
-        rating_after: 1020,
-      }
-    ]
-  }
+  const [eventInfo, setEventInfo] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const eid = Number(window.location.pathname.match(/\/(\d+)/)[1]);
+    let loadEventInfo = async () => {
+      setEventInfo(await fetchEventInfo(eid));
+      setLoading(false);
+    }
+
+    loadEventInfo();
+  }, []);
+
+  const eventDate = new Date(eventInfo.edate);
+  const eventDateString = `${eventDate.getMonth() + 1}/${eventDate.getDate()}/${eventDate.getFullYear()}`;
 
   return (
-    <Container>
-      {data.name}
-      <Table striped bordered hover size="sm">
-        <thead>
-          <tr>
-            <th>Winner</th>
-            <th>Loser</th>
-            <th>Score</th>
-            <th>Rating Change</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.matches.map(match_datum =>
-            <tr key={`${match_datum.winner_id}+${match_datum.loser_id}`}>
-              <td><Link to = {`/player/${match_datum.winner_id}`}>{match_datum.winner_name}</Link></td>
-              <td><Link to = {`/player/${match_datum.loser_id}`}>{match_datum.loser_name}</Link></td>
-              <td>{`${match_datum.winner_score}-${match_datum.loser_score}`}</td>
-              <td>{match_datum.rating_change}</td>
-            </tr>
-          )}
-        </tbody>
-      </Table>
-      Ratings
-      <Table striped bordered hover size="sm">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Rating Before</th>
-            <th>Rating After</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.ratings.map(rating_datum =>
-            <tr key={rating_datum.id}>
-              <td><Link to = {`/player/${rating_datum.id}`}>{rating_datum.name}</Link></td>
-              <td>{rating_datum.rating_before}</td>
-              <td>{rating_datum.rating_after}</td>
-            </tr>
-          )}
-        </tbody>
-      </Table>
+    <Container className="EventPage">
+      {!loading ?
+        <React.Fragment>
+          <h1>{`${eventDateString} ${eventInfo.ename}`}</h1>
+          <br/>
+          <h1>Matches</h1>
+          <Table striped bordered hover size="sm">
+            <thead>
+              <tr>
+                <th>Winner</th>
+                <th>Loser</th>
+                <th>Score</th>
+                <th>Rating Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              {eventInfo.matches.map(matchInfo =>
+                <tr key={`${matchInfo.winner_id}+${matchInfo.loser_id}`}>
+                  <td><Link to = {`/player/${matchInfo.winner_id}`}>{matchInfo.winner_name}</Link></td>
+                  <td><Link to = {`/player/${matchInfo.loser_id}`}>{matchInfo.loser_name}</Link></td>
+                  <td>{`${matchInfo.winner_score}-${matchInfo.loser_score}`}</td>
+                  <td>{matchInfo.rating_diff}</td>
+                </tr>
+              )}
+            </tbody>
+          </Table>
+          <br/>
+          <h1>Rating Changes</h1>
+          <Table striped bordered hover size="sm">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Rating Before</th>
+                <th>Rating After</th>
+              </tr>
+            </thead>
+            <tbody>
+              {eventInfo.ratings.map(ratingInfo =>
+                <tr key={ratingInfo.pid}>
+                  <td><Link to = {`/player/${ratingInfo.pid}`}>{ratingInfo.pname}</Link></td>
+                  <td>{ratingInfo.rating_before}</td>
+                  <td>{ratingInfo.rating_after}</td>
+                </tr>
+              )}
+            </tbody>
+          </Table>
+        </React.Fragment>
+      :
+        <ReactLoading type='spin' color='#C41E3A' className='react-loading'/>
+      }
     </Container>
   );
 }

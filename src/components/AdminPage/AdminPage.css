@@ -1,0 +1,70 @@
+.AdminPage {
+  margin-top: 20px;
+}
+
+h1 {
+  text-align: center;
+  padding-bottom: 10px;
+}
+
+.admin-form {
+  display: flex;
+}
+
+.btn-primary {
+  background-color: #C41E3A !important;
+  border-color: #C41E3A !important;
+}
+
+.table {
+  border-color: black !important;
+}
+
+.admin-header {
+  display: grid;
+  grid-template-columns: 1fr repeat(3, auto) 1fr;
+  grid-column-gap: 5px;
+  justify-items: center;
+}
+
+.admin-header h1 {
+  grid-column-start: 2;
+}
+
+.change-button {
+  grid-column-start: 5;
+  margin-left: auto;
+  margin-top: auto;
+  margin-bottom: auto;
+}
+
+.form-label {
+  width: 30%;
+  max-width: 22%;
+  margin-bottom: auto !important;
+  margin-top: auto;
+}
+
+.modal-header {
+  display: grid !important;
+  grid-template-columns: 1fr repeat(3, auto) 1fr;
+  grid-column-gap: 5px;
+  justify-items: center;
+}
+
+.modal-title {
+  grid-column-start: 4;
+}
+
+.modal-header .btn-close {
+  grid-column-start: 5;
+  margin-left: auto;
+}
+
+.admin-form > div {
+  width: 100%;
+}
+
+.multiselect-container {
+  position: relative !important;
+}

@@ -1,0 +1,17 @@
+.PlayerList {
+  margin-top: 20px;
+}
+
+h1 {
+  text-align: center;
+  padding-bottom: 10px;
+}
+
+.player-info {
+  font-size: 30px;
+  padding-bottom: 10px;
+}
+
+.table {
+  border-color: black !important;
+}
