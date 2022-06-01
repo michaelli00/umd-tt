@@ -217,7 +217,7 @@ app.post('/api/admin/update_players', (req,res) => {
 //   “matches” : [ { "winner_id" : winner_id, "loser_id" : loser_id, 
 //   "winner_score" : winner_score, "loser_score" : loser_score }, ... ] } 
 // calculates the new ratings and updates the database
-app.post('/api/admin/', async (req,res) => {
+app.post('/api/admin/event', async (req,res) => {
     // console.log(req.body);
     let event = { "event_id" : -1, "matches" : "", "ratings" : "" };
     // adding event name and date to the events table
