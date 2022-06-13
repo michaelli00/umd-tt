@@ -2,13 +2,9 @@ import React, { useEffect, useState } from 'react';
 import Container from 'react-bootstrap/Container';
 import Table from 'react-bootstrap/Table';
 import ReactLoading from 'react-loading';
-import {
-  Link,
-} from "react-router-dom";
-import {
-  fetchPlayerInfo,
-  formatDate,
-} from '../../utils/Utils';
+import { Link } from 'react-router-dom';
+import { LOADING_COLOR } from '../../utils/Constants';
+import { fetchPlayerInfo, formatDate } from '../../utils/Utils';
 import './PlayerProfile.css';
 
 function PlayerProfile() {
@@ -20,23 +16,29 @@ function PlayerProfile() {
     let loadPlayerInfo = async () => {
       setPlayerInfo(await fetchPlayerInfo(pid));
       setLoading(false);
-    }
+    };
 
     loadPlayerInfo();
   }, []);
-  console.log(playerInfo);
 
   return (
-    <Container className="PlayerProfile">
-      {!loading ?
+    <Container className='PlayerProfile'>
+      {!loading ? (
         <React.Fragment>
           <h1> {playerInfo.pname} </h1>
-          <div className="player-info"><b>Player ID</b>: &nbsp; {playerInfo.pid} </div>
-          <div className="player-info"><b>Player Rating</b>: &nbsp; {playerInfo.pr} </div>
-          <div className="player-info"><b>Player Active</b>: &nbsp; {playerInfo.active ? 'Active' : 'Inactive'} </div>
-          <br/>
+          <div className='player-info'>
+            <b>Player ID</b>: &nbsp; {playerInfo.pid}{' '}
+          </div>
+          <div className='player-info'>
+            <b>Player Rating</b>: &nbsp; {playerInfo.pr}{' '}
+          </div>
+          <div className='player-info'>
+            <b>Player Active</b>: &nbsp;{' '}
+            {playerInfo.active ? 'Active' : 'Inactive'}{' '}
+          </div>
+          <br />
           <h1> Past Results </h1>
-          <Table striped bordered hover size="sm">
+          <Table striped bordered hover size='sm'>
             <thead>
               <tr>
                 <th>Date</th>
@@ -46,20 +48,28 @@ function PlayerProfile() {
               </tr>
             </thead>
             <tbody>
-              {playerInfo.events.map(eventInfo =>
+              {playerInfo.events.map((eventInfo) => (
                 <tr key={eventInfo.eid}>
                   <td>{formatDate(eventInfo.edate)}</td>
-                  <td><Link to = {`/event/${eventInfo.eid}`}>{eventInfo.ename}</Link></td>
+                  <td>
+                    <Link to={`/event/${eventInfo.eid}`}>
+                      {eventInfo.ename}
+                    </Link>
+                  </td>
                   <td>{eventInfo.rating_before}</td>
                   <td>{eventInfo.rating_after}</td>
                 </tr>
-              )}
+              ))}
             </tbody>
           </Table>
         </React.Fragment>
-      :
-        <ReactLoading type='spin' color='#C41E3A' className='react-loading'/>
-      }
+      ) : (
+        <ReactLoading
+          type='spin'
+          color={LOADING_COLOR}
+          className='react-loading'
+        />
+      )}
     </Container>
   );
 }

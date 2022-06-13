@@ -11,6 +11,14 @@ h1 {
   display: flex;
 }
 
+.admin-form-multiselect {
+  display: flex;
+}
+
+.admin-form-multiselect > div {
+  width: 100%;
+}
+
 .btn-primary {
   background-color: #C41E3A !important;
   border-color: #C41E3A !important;
@@ -60,11 +68,6 @@ h1 {
   grid-column-start: 5;
   margin-left: auto;
 }
-
-.admin-form > div {
-  width: 100%;
-}
-
 .multiselect-container {
   position: relative !important;
 }
