@@ -19,8 +19,9 @@ import {
   fetchPlayerInfo,
   fetchPlayers,
   postCreateNewPlayer,
-  postUpdatePlayerInfo,
   postSubmitEventResults,
+  putUpdatePlayerInfo,
+  putUpdateEventResults,
 } from '../../utils/Utils';
 import 'react-datepicker/dist/react-datepicker.css';
 import './AdminPage.css';
@@ -32,7 +33,8 @@ function AdminPage() {
   const [showAddPlayerForm, setShowAddPlayerForm] = useState(false);
   const [showUpdatePlayerInfoForm, setShowUpdatePlayerInfoForm] =
     useState(false);
-  const [showResultsForm, setShowResultsForm] = useState(false);
+  const [showAddResultsForm, setShowAddResultsForm] = useState(false);
+  const [showUpdateResultsForm, setShowUpdateResultsForm] = useState(false);
 
   const [playerList, setPlayerList] = useState([]); // all players list
   const [leagueList, setLeagueList] = useState([]); // all leagues/events list
@@ -50,7 +52,7 @@ function AdminPage() {
     loadAdminPageData();
   }, []);
 
-  const onSignIn = (event) => {
+  const onSignIn = event => {
     event.preventDefault();
     const password = event.target.elements.formBasicPassword.value;
     if (password !== process.env.REACT_APP_ADMIN_PASSWORD) {
@@ -58,23 +60,6 @@ function AdminPage() {
     } else {
       setAdminValidated(true);
     }
-  };
-
-  const onSubmitAddPlayerForm = async (event) => {
-    event.preventDefault();
-    const name = event.target.elements.formBasicName.value;
-    const rating = Number(event.target.elements.formBasicRating.value);
-    const reqBody = {
-      list: [
-        {
-          pname: name,
-          init_rating: rating,
-        },
-      ],
-    };
-    await postCreateNewPlayer(reqBody);
-    setPlayerList(await fetchPlayers());
-    setShowAddPlayerForm(false);
   };
 
   const onOpenAddPlayerForm = () => {
@@ -85,106 +70,143 @@ function AdminPage() {
     setShowAddPlayerForm(false);
   };
 
-  const onOpenUpdatePlayerInfoForm = async (pid) => {
-    const playerInfo = await fetchPlayerInfo(pid);
-    setPlayerInfo(playerInfo);
-    setShowUpdatePlayerInfoForm(true);
-  };
-
-  const onSubmitUpdatePlayerInfoForm = async (event) => {
+  const onSubmitAddPlayerForm = async event => {
     event.preventDefault();
     const name = event.target.elements.formBasicName.value;
     const rating = Number(event.target.elements.formBasicRating.value);
     const reqBody = {
-      list: [
+      players: [
         {
-          pid: playerInfo.pid,
           pname: name,
-          new_rating: rating,
-          active: playerInfo.active,
+          init_rating: rating,
         },
       ],
     };
-    await postUpdatePlayerInfo(reqBody);
-    setPlayerList(await fetchPlayers());
-    setShowUpdatePlayerInfoForm(false);
+    const updatedPlayersResponse = await postCreateNewPlayer(reqBody);
+    setPlayerList(updatedPlayersResponse.players);
+    setShowAddPlayerForm(false);
+  };
+
+  const onOpenUpdatePlayerInfoForm = async pid => {
+    const playerInfo = await fetchPlayerInfo(pid);
+    setPlayerInfo(playerInfo);
+    setShowUpdatePlayerInfoForm(true);
   };
 
   const onCloseUpdatePlayerInfoForm = () => {
     setShowUpdatePlayerInfoForm(false);
   };
 
-  const onChangeSelectedGroupPlayers = (selected) => {
+  const onSubmitUpdatePlayerInfoForm = async event => {
+    event.preventDefault();
+    const name = event.target.elements.formBasicName.value;
+    const rating = Number(event.target.elements.formBasicRating.value);
+    const reqBody = {
+      players: [
+        {
+          pid: playerInfo.pid,
+          pname: name,
+          rating: rating,
+          active: playerInfo.active,
+        },
+      ],
+    };
+    const updatedPlayersResponse = await putUpdatePlayerInfo(reqBody);
+    setPlayerList(updatedPlayersResponse.players);
+    setShowUpdatePlayerInfoForm(false);
+  };
+
+  const onChangeSelectedGroupPlayers = selected => {
     setEventInfo({ ...eventInfo, selectedPlayers: selected });
   };
 
   const onOpenResultsForm = () => {
-    setShowResultsForm(true);
+    setShowAddResultsForm(true);
   };
 
   const onCloseResultsForm = () => {
-    setShowResultsForm(false);
+    setShowUpdateResultsForm(false);
+    setShowAddResultsForm(false);
     setEventInfo({});
   };
 
-  const onOpenOldEventResultsForm = async (eid) => {
+  const onOpenOldEventResultsForm = async eid => {
     const eventInfo = await fetchEventInfo(eid);
     const eventDate = new Date(eventInfo.edate);
     const playersObj = {};
-    eventInfo.matches.forEach((match) => {
+    eventInfo.matches.forEach(match => {
       playersObj[match.winner_id] = match.winner_name;
       playersObj[match.loser_id] = match.loser_name;
     });
-    const selectedPlayers = Object.keys(playersObj).map((pid) => ({
+    const selectedPlayers = Object.keys(playersObj).map(pid => ({
       pid: Number(pid),
       pname: playersObj[pid],
     }));
     setEventInfo({
       ...eventInfo,
+      eid: eid,
       eventDate: eventDate,
       selectedPlayers: selectedPlayers,
     });
-    setShowResultsForm(true);
+    setShowUpdateResultsForm(true);
   };
 
-  const onSubmitResultsForm = async (event) => {
+  const onSubmitResultsForm = async event => {
     event.preventDefault();
     const name = event.target.elements.formBasicName.value;
-    const date = eventInfo.edate;
+    const date = eventInfo.eventDate;
+    if (!date) {
+      alert('Please enter event date.');
+      return;
+    }
     const players = eventInfo.selectedPlayers;
+    if (!players || players.length < 2) {
+      alert('Please choose at least 2 players.');
+      return;
+    }
     const playerMatchPairs = players
       .map((player1, index) =>
-        players.slice(index + 1).map((player2) => [player1, player2])
+        players.slice(index + 1).map(player2 => [player1, player2])
       )
       .flat();
     const matches = [];
     for (let i = 0; i < (players.length * (players.length - 1)) / 2; i++) {
       const score = event.target.elements[`formBasicPair${i}`].value;
-      if (score) {
+      if (score.match(/(\d).*-.*(\d)/)) {
         const points = score
-          .match(/(\d)-(\d)/)
+          .match(/(\d).*-.*(\d)/)
           .slice(1)
-          .map((point) => Number(point));
-        const p1Score = points[0];
-        const p2Score = points[1];
-        let match = {};
-        if (p1Score > p2Score) {
-          match = {
-            winner_id: playerMatchPairs[i][0].pid,
-            winner_score: p1Score,
-            lower_id: playerMatchPairs[i][1].pid,
-            loser_score: p2Score,
-          };
-        } else if (p2Score > p1Score) {
-          match = {
-            winner_id: playerMatchPairs[i][1].pid,
-            winner_score: p2Score,
-            loser_id: playerMatchPairs[i][0].pid,
-            loser_score: p1Score,
-          };
+          .map(point => Number(point));
+        if (points.length === 2) {
+          const p1Score = points[0];
+          const p2Score = points[1];
+          let match = {};
+          if (p1Score > p2Score) {
+            match = {
+              winner_id: playerMatchPairs[i][0].pid,
+              winner_score: p1Score,
+              loser_id: playerMatchPairs[i][1].pid,
+              loser_score: p2Score,
+            };
+          } else if (p2Score > p1Score) {
+            match = {
+              winner_id: playerMatchPairs[i][1].pid,
+              winner_score: p2Score,
+              loser_id: playerMatchPairs[i][0].pid,
+              loser_score: p1Score,
+            };
+          }
+          matches.push(match);
         }
-        matches.push(match);
+      } else if (score !== '') {
+        alert('Please format match scores correctly. For example 3-0');
+        return;
       }
+    }
+
+    if (matches.length === 0) {
+      alert('Please enter at least 1 match result.');
+      return;
     }
 
     const reqBody = {
@@ -192,17 +214,25 @@ function AdminPage() {
       ename: name,
       matches: matches,
     };
-    console.log(reqBody);
 
-    await postSubmitEventResults(reqBody);
-    setShowResultsForm(false);
+    if (showAddResultsForm) {
+      const updatedEventsResponse = await postSubmitEventResults(reqBody);
+      setLeagueList(updatedEventsResponse.all_events);
+      setShowAddResultsForm(false);
+    } else if (showUpdateResultsForm) {
+      reqBody['eid'] = eventInfo['eid'];
+      const updatedEventsResponse = await putUpdateEventResults(reqBody);
+      setLeagueList(updatedEventsResponse.all_events);
+      setShowUpdateResultsForm(false);
+    }
+    setPlayerList(await fetchPlayers());
     setEventInfo({});
   };
 
-  const renderMatchResultsForm = (players) => {
+  const renderMatchResultsForm = players => {
     const playerMatchPairs = players
       .map((player1, index) =>
-        players.slice(index + 1).map((player2) => [player1, player2])
+        players.slice(index + 1).map(player2 => [player1, player2])
       )
       .flat();
     const formattedMatchResults = eventInfo.matches
@@ -235,7 +265,7 @@ function AdminPage() {
   };
 
   const flatLeagueList = [];
-  leagueList.forEach((league) =>
+  leagueList.forEach(league =>
     flatLeagueList.push.apply(
       flatLeagueList,
       league.events.map((event, index) => ({
@@ -271,14 +301,14 @@ function AdminPage() {
                   <Form.Label>
                     <h5>Player Name</h5>
                   </Form.Label>
-                  <Form.Control type='input' placeholder='Name' />
+                  <Form.Control type='input' placeholder='Name' required />
                 </Form.Group>
                 <br />
                 <Form.Group controlId='formBasicRating' className='admin-form'>
                   <Form.Label>
                     <h5>Rating</h5>
                   </Form.Label>
-                  <Form.Control type='text' placeholder='Rating' />
+                  <Form.Control type='number' placeholder='Rating' required />
                 </Form.Group>
               </Modal.Body>
               <Modal.Footer>
@@ -298,7 +328,7 @@ function AdminPage() {
             backdrop='static'
           >
             <Modal.Header closeButton>
-              <Modal.Title>Update an Existing Playe Infor</Modal.Title>
+              <Modal.Title>Update an Existing Player Info</Modal.Title>
             </Modal.Header>
             <Form onSubmit={onSubmitUpdatePlayerInfoForm}>
               <Modal.Body>
@@ -310,6 +340,7 @@ function AdminPage() {
                     type='input'
                     placeholder='Name'
                     defaultValue={playerInfo.pname}
+                    required
                   />
                 </Form.Group>
                 <br />
@@ -318,9 +349,10 @@ function AdminPage() {
                     <h5>Rating</h5>
                   </Form.Label>
                   <Form.Control
-                    type='text'
+                    type='number'
                     placeholder='Rating'
                     defaultValue={playerInfo.pr}
+                    required
                   />
                 </Form.Group>
                 <br />
@@ -332,9 +364,7 @@ function AdminPage() {
                     type='radio'
                     name='activeOptions'
                     defaultValue={playerInfo.active}
-                    onChange={(v) =>
-                      setPlayerInfo({ ...playerInfo, active: v })
-                    }
+                    onChange={v => setPlayerInfo({ ...playerInfo, active: v })}
                   >
                     {activeInactiveRadios.map((radio, idx) => (
                       <ToggleButton
@@ -364,7 +394,7 @@ function AdminPage() {
           </Modal>
           <Modal
             size='lg'
-            show={showResultsForm}
+            show={showAddResultsForm || showUpdateResultsForm}
             onHide={onCloseResultsForm}
             backdrop='static'
           >
@@ -381,6 +411,7 @@ function AdminPage() {
                     type='input'
                     placeholder='Name'
                     defaultValue={eventInfo.ename}
+                    required
                   />
                 </Form.Group>
                 <br />
@@ -390,7 +421,7 @@ function AdminPage() {
                   </Form.Label>
                   <DatePicker
                     selected={eventInfo.eventDate}
-                    onChange={(date) =>
+                    onChange={date =>
                       setEventInfo({ ...eventInfo, eventDate: date })
                     }
                   />
@@ -404,7 +435,7 @@ function AdminPage() {
                     <h5>Select Players</h5>
                   </Form.Label>
                   <Multiselect
-                    options={playerList.map((player) => {
+                    options={playerList.map(player => {
                       return { pname: player.pname, pid: player.pid };
                     })}
                     selectedValues={eventInfo.selectedPlayers}
@@ -416,6 +447,13 @@ function AdminPage() {
                 </Form.Group>
                 <br />
                 <br />
+                {eventInfo.selectedPlayers &&
+                  eventInfo.selectedPlayers.length > 1 && (
+                    <h5>
+                      If no match results b/w two players, you can leave the
+                      field empty.
+                    </h5>
+                  )}
                 <br />
                 {eventInfo.selectedPlayers &&
                   eventInfo.selectedPlayers.length > 1 &&
@@ -449,7 +487,7 @@ function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {playerList.map((player) => (
+                  {playerList.map(player => (
                     <tr key={player.pid}>
                       <td>
                         <Link to={`/player/${player.pid}`}>{player.pname}</Link>
@@ -485,7 +523,7 @@ function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {flatLeagueList.map((event) => (
+                  {flatLeagueList.map(event => (
                     <tr key={event.eid}>
                       {event.diffDate ? (
                         <td>{formatDate(event.date)}</td>
@@ -518,7 +556,11 @@ function AdminPage() {
           )}
         </React.Fragment>
       ) : (
-        <ReactLoading type='spin' color={LOADING_COLOR} className='react-loading' />
+        <ReactLoading
+          type='spin'
+          color={LOADING_COLOR}
+          className='react-loading'
+        />
       )}
     </Container>
   );
