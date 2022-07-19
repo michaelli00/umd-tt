@@ -1,8 +1,8 @@
 import {
-  FETCH_EVENTS_URL,
   FETCH_EVENT_INFO_URL,
-  FETCH_PLAYERS_URL,
+  FETCH_EVENTS_URL,
   FETCH_PLAYER_INFO_URL,
+  FETCH_PLAYERS_URL,
   POST_CREATE_NEW_PLAYER_URL,
   POST_SUBMIT_EVENT_RESULTS,
   PUT_UPDATE_EVENT_RESULTS,
@@ -35,24 +35,24 @@ export const formatMatchResults = matches => {
   return formattedResults;
 };
 
+export const fetchEventInfo = async eid => {
+  return fetch(`${FETCH_EVENT_INFO_URL}/${eid}`).then(res => res.json());
+};
+
 export const fetchEvents = async () => {
   return fetch(FETCH_EVENTS_URL)
     .then(res => res.json())
     .then(data => data.all_events);
 };
 
-export const fetchEventInfo = async eid => {
-  return fetch(`${FETCH_EVENT_INFO_URL}/${eid}`).then(res => res.json());
+export const fetchPlayerInfo = async pid => {
+  return fetch(`${FETCH_PLAYER_INFO_URL}/${pid}`).then(res => res.json());
 };
 
 export const fetchPlayers = async () => {
   return fetch(FETCH_PLAYERS_URL)
     .then(res => res.json())
     .then(data => data.players);
-};
-
-export const fetchPlayerInfo = async pid => {
-  return fetch(`${FETCH_PLAYER_INFO_URL}/${pid}`).then(res => res.json());
 };
 
 export const postSubmitEventResults = async body => {

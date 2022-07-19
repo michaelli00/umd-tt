@@ -38,7 +38,7 @@ function EventPage() {
               </tr>
             </thead>
             <tbody>
-              {eventInfo.matches.map((matchInfo) => (
+              {eventInfo.matches.map(matchInfo => (
                 <tr key={`${matchInfo.winner_id}+${matchInfo.loser_id}`}>
                   <td>
                     <Link to={`/player/${matchInfo.winner_id}`}>
@@ -67,7 +67,7 @@ function EventPage() {
               </tr>
             </thead>
             <tbody>
-              {eventInfo.ratings.map((ratingInfo) => (
+              {eventInfo.ratings.map(ratingInfo => (
                 <tr key={ratingInfo.pid}>
                   <td>
                     <Link to={`/player/${ratingInfo.pid}`}>

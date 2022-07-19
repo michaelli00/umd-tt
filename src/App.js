@@ -2,15 +2,15 @@ import Container from 'react-bootstrap/Container';
 import { Navbar } from 'react-bootstrap'; // Navbar needs to be imported like this way, was causing build issues otherwise
 import Nav from 'react-bootstrap/Nav';
 import {
-  BrowserRouter as Router,
+  BrowserRouter,
   Navigate,
   Route,
   Routes,
 } from 'react-router-dom';
 import AdminPage from './components/AdminPage/AdminPage';
 import EventPage from './components/EventPage/EventPage';
-import PlayerList from './components/PlayerList/PlayerList';
 import LeagueList from './components/LeagueList/LeagueList';
+import PlayerList from './components/PlayerList/PlayerList';
 import PlayerProfile from './components/PlayerProfile/PlayerProfile';
 import './App.css';
 
@@ -18,7 +18,7 @@ function App() {
   const pathname = window.location.pathname;
   return (
     <div className='App'>
-      <Router>
+      <BrowserRouter>
         <Navbar id='main-navbar' expand='lg'>
           <Navbar.Brand href='/'>UMD Table Tennis</Navbar.Brand>
           <Navbar.Toggle aria-controls='basic-navbar-nav' />
@@ -47,7 +47,7 @@ function App() {
           <Route path='/player/*' element={<PlayerProfile />} />
           <Route path='/*' element={<Navigate to='/' />} />
         </Routes>
-      </Router>
+      </BrowserRouter>
     </div>
   );
 }

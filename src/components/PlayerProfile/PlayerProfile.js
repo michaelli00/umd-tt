@@ -27,14 +27,14 @@ function PlayerProfile() {
         <React.Fragment>
           <h1> {playerInfo.pname} </h1>
           <div className='player-info'>
-            <b>Player ID</b>: &nbsp; {playerInfo.pid}{' '}
+            <b>Player ID</b>: &nbsp; {playerInfo.pid}
           </div>
           <div className='player-info'>
-            <b>Player Rating</b>: &nbsp; {playerInfo.pr}{' '}
+            <b>Player Rating</b>: &nbsp; {playerInfo.pr}
           </div>
           <div className='player-info'>
-            <b>Player Active</b>: &nbsp;{' '}
-            {playerInfo.active ? 'Active' : 'Inactive'}{' '}
+            <b>Player Active</b>: &nbsp;
+            {playerInfo.active ? 'Active' : 'Inactive'}
           </div>
           <br />
           <h1> Past Results </h1>
