@@ -3,371 +3,533 @@ const app = express();
 const cors = require('cors');
 const path = require('path');
 const pool = require('./db');
+const format = require('pg-format');
 const get_points_exchanged = require('./rating_algo');
+const { warn } = require('console');
 
 const port = process.env.PORT || 5000;
+
+const updateEventResults = async (client, eventId, oldPlayerRatings, updatedPlayerRatings, matches) => {
+  const formattedMatches = [];
+  matches.forEach(match => {
+    const winner_rating = oldPlayerRatings[match.winner_id];
+    const loser_rating = oldPlayerRatings[match.loser_id];
+    const rating_change = get_points_exchanged(
+      winner_rating,
+      loser_rating,
+      1
+    );
+    formattedMatches.push([
+      eventId,
+      match['winner_id'],
+      match['loser_id'],
+      match['winner_score'],
+      match['loser_score'],
+      rating_change,
+    ]);
+    updatedPlayerRatings[match['winner_id']] += rating_change;
+    updatedPlayerRatings[match['loser_id']] = Math.max(
+      updatedPlayerRatings[match['loser_id']] - rating_change,
+      0
+    );
+  });
+  const eventPlayers = Array.from(
+    new Set(
+      matches
+        .map(match => match['winner_id'])
+        .concat(matches.map(match => match['loser_id']))
+    )
+  );
+  const updateMatchesQuery = format(
+    `UPDATE matches m SET winner_id=updated_m.winner_id, loser_id=updated_m.loser_id, winner_score=updated_m.winner_score, loser_score=updated_m.loser_score, rating_change=updated_m.rating_change FROM (VALUES %s) AS updated_m (event_id, winner_id, loser_id, winner_score, loser_score, rating_change) WHERE m.event_id=updated_m.event_id`,
+    formattedMatches
+  );
+  await client.query(updateMatchesQuery);
+
+  const updatePlayersQuery = format(
+    `UPDATE players p SET rating=updated_p.rating FROM (VALUES %s) AS updated_p(id, rating) WHERE p.id=updated_p.id`,
+    Object.keys(updatedPlayerRatings).map(id => [
+      id,
+      updatedPlayerRatings[id],
+    ])
+  );
+  await client.query(updatePlayersQuery);
+  const updatePlayerHistoriesQuery = format(
+    `UPDATE player_histories ph SET player_id=updated_ph.player_id, rating_before=updated_ph.rating_before, rating_after=updated_ph.rating_after FROM (VALUES %s) AS updated_ph(player_id, event_id, rating_before, rating_after) WHERE ph.event_id=updated_ph.event_id`,
+    eventPlayers.map(id => [
+      id,
+      eventId,
+      oldPlayerRatings[id],
+      updatedPlayerRatings[id],
+    ])
+  );
+  await client.query(updatePlayerHistoriesQuery);
+}
 
 // middleware
 app.use(express.static(path.join(__dirname, '../build')));
 app.use(cors());
 app.use(express.json());
 
-// routes
-
-// returns the id, name and rating of each player
-// returns { "players" : [ {"pid" : player_ID, "pname" : player_name, "pr" : rating, "active" : active}, ... ] }
+// returns
+//    [
+//      {
+//        "id": player_ID,
+//        "name": player_name,
+//        "rating": rating,
+//        "active": active
+//      },
+//      ...
+//    ]
 app.get('/api/players', (req, res) => {
   pool.query(
-    'SELECT player_id as pid, player_name as pname, rating as pr, active FROM ratings ORDER BY active desc, rating desc, player_id asc',
+    `
+      SELECT id, name, rating, active FROM players
+      ORDER BY active DESC, rating DESC, id ASC
+    `,
     (err, results) => {
       if (err) {
         res.status(500).send('GET players list errored');
         return;
       }
-      let toRet = { players: results.rows };
+      const toRet = results.rows;
       res.status(200).json(toRet);
     }
   );
 });
 
-// returns all the information for a single player given the player id
-// returns { "pid" : player_ID, "pname" : player_name, "pr" : rating, "active": active, events : [{ "eid" : event_id, "ename" : event_name, "edate" : event_date, "rating_before" : rating_before, "rating_after" : rating_after }, ... ] }
+// returns
+//    {
+//      "id": player_ID,
+//      "name": player_name,
+//      "rating": rating,
+//      "active": active,
+//      "events":
+//        [
+//          {
+//            "id": event_id,
+//            "name": event_name,
+//            "date": event_date,
+//            "rating_before": rating_before,
+//            "rating_after": rating_after
+//          }, ...
+//        ],
+//      ...
+//    }
 app.get('/api/player/:id', (req, res) => {
-  const toRet = { pid: -1, pname: '', pr: -1, active: false, events: [] };
-  // getting the name, id and current rating
   pool.query(
-    `SELECT * from ratings WHERE player_id=${req.params.id}`,
-    (err, results) => {
-      if (err) {
-        console.log(err);
-        res.status(500).send('GET player information errored');
-        return;
-      }
-      toRet['pid'] = results.rows[0]['player_id'];
-      toRet['pname'] = results.rows[0]['player_name'];
-      toRet['pr'] = results.rows[0]['rating'];
-      toRet['active'] = results.rows[0]['active'];
-    }
-  );
-
-  // getting event information
-  //
-  pool.query(
-    `drop table if exists temp;
-    create temporary table temp (eid integer,ename varchar(255),edate varchar(10),rating_before integer,rating_after integer);
-    do
-    $$
-    declare
-        f record;
-    begin
-
-        for f in (
-            with events (eid, ename, edate) as (
-                select distinct event_id,event_name,event_date
-                from (
-                    select e.event_name, e.event_id,e.event_date,m.winner_id, m.loser_id
-                    from events e join matches m
-                    on m.winner_id=${req.params.id} or m.loser_id=${req.params.id}
-                    where e.event_id in (select distinct event_id from matches)
-                ) as temp
-            ) select eid,ename,edate from events order by eid asc
-        )
-        loop
-            insert into temp select f.eid, f.ename,f.edate,coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<f.eid),0) as rating_before, coalesce((select sum(rating_diff) from matches m where winner_id=${req.params.id} and m.event_id<=f.eid),0) - coalesce((select sum(rating_diff) from matches m where loser_id=${req.params.id} and m.event_id<=f.eid),0) as rating_after;
-
-        end loop;
-    end;
-    $$;
-    select * from temp;`,
+    `
+      SELECT id, name, rating, active, (
+        SELECT JSON_AGG(agg) FROM (
+          SELECT id, name, date, rating_before, rating_after
+          FROM player_histories
+          INNER JOIN events ON player_histories.event_id=events.id
+          WHERE player_histories.player_id=${req.params.id}
+        ) AS agg
+      ) AS events
+      FROM players
+      WHERE id = ${req.params.id}
+    `,
     (err, results) => {
       if (err) {
         res.status(500).send('GET player information errored');
         return;
       }
-      toRet['events'] = results[3].rows;
-      res.status(200).json(toRet);
-    }
-  );
-  // res.status(200).json(result);
-});
-
-// returns all the unique dates for all the events
-// returns { "dates" : [ date1, date2, ... ] }
-app.get('/api/dates', (req, res) => {
-  pool.query(
-    'select distinct event_date from events order by event_date asc',
-    (err, results) => {
-      if (err) {
-        res.status(500).send('GET dates errored');
-        return;
-      }
-      let toRet = { dates: [] };
-      if (results) {
-        for (let row of results.rows) {
-          toRet['dates'].push(row['event_date'].toISOString().split('T')[0]);
-        }
-      }
+      const toRet = {
+        id: results.rows[0]['id'],
+        name: results.rows[0]['name'],
+        rating: results.rows[0]['rating'],
+        active: results.rows[0]['active'],
+        events: results.rows[0]['events'],
+      };
       res.status(200).json(toRet);
     }
   );
 });
 
-// returns all events group by date
-// returns { "all_events" : [ { "date" : event_date, "events" : [ "eid" : event_id, "ename" : event_name ] } ] }
+// returns
+//    [
+//      {
+//        "date": event_date,
+//        "events":
+//          [
+//            {
+//              "id": event_id,
+//              "name": event_name
+//            },
+//            ...
+//          ]
+//      },
+//      ...
+//    ]
 app.get('/api/events', (req, res) => {
   pool.query(
-    'select event_date, array_agg(event_id) as ids, array_agg(event_name) as names from events group by event_date order by event_date',
+    `
+      SELECT date, ARRAY_AGG(id) AS ids, ARRAY_AGG(name) AS names
+      FROM events
+      GROUP BY date ORDER BY date
+    `,
     (err, results) => {
       if (err) {
         res.status(500).send('GET events errored');
         return;
       }
-      let toRet = { all_events: [] };
-      if (results) {
-        for (let row of results.rows) {
-          toRet['all_events'].push({
-            date: row['event_date'].toISOString().split('T')[0],
-            events: row['ids'].map((e, i) => ({
-              eid: e,
-              ename: row['names'][i],
-            })),
-          });
-        }
-      }
+      const toRet = results.rows.map(row => ({
+        date: row.date.toISOString().split('T')[0],
+        events: row.ids.map((id, index) => ({
+          id: id,
+          name: row.names[index],
+        })),
+      }));
       res.status(200).json(toRet);
     }
   );
 });
 
-// returns all the information for a specific event given event id
-// returns { "matches" : [ { "winner_id" : winner_id, "winner_name" : winner_name, "loser_id" : loser_id,
-// “loser_name” : loser_name, "winner_score" : winner_score, "loser_score" : loser_score, "points_exchanged": points_exchanged}, ... ],
-// "ratings" : [ { "pid" : player_id, "pname" : player_name, "rating_before" : rating_before,
-// "rating_after" : rating_after }, ... ], “ename”: event_name, “edate”: event_date }
+// returns
+//    {
+//      “name”: event_name,
+//      “date”: event_date,
+//      "matches":
+//        [
+//          {
+//            "winner_id": winner_id,
+//            "winner_name": winner_name,
+//            "loser_id": loser_id,
+//            “loser_name”: loser_name,
+//            "winner_score": winner_score,
+//            "loser_score": loser_score,
+//            "rating_change": rating_change
+//          },
+//          ...
+//        ],
+//      "ratings" :
+//        [
+//          {
+//            "id": player_id,
+//            "name": player_name,
+//            "rating_before": rating_before,
+//            "rating_after": rating_after
+//          },
+//          ...
+//        ],
+//    }
 app.get('/api/event/:event_id', (req, res) => {
-  let toRet = { matches: [], ratings: [], ename: '', edate: '' };
-
-  // adding the event name and date to the result
-  pool.query(
-    `select event_name, event_date from events where event_id=${req.params.event_id}`,
-    (err, results) => {
-      if (err) {
-        res.status(500).send('GET event information errored');
-        return;
-      }
-      toRet['ename'] = results.rows[0]['event_name'];
-      toRet['edate'] = results.rows[0]['event_date']
-        .toISOString()
-        .split('T')[0];
-    }
-  );
-
-  // adding the matches to the result
-  pool.query(
-    `select m.winner_id, m.loser_id, m.winner_score, m.loser_score, r1.player_name as winner_name, r2.player_name as loser_name, m.rating_diff from (matches m join ratings r1 on m.winner_id=r1.player_id) join ratings r2 on m.loser_id=r2.player_id where m.event_id=${req.params.event_id}`,
-    (err, results) => {
-      if (err) {
-        res.status(500).send('GET event information errored');
-        return;
-      }
-      toRet['matches'] = results.rows;
-      // res.status(200).json(result);
-    }
-  );
-
-  // adding the ratings to the result
-  // for each player, sum up all the rating_diff for all past events - assuming that event id's are absolutely increasing (earliest events always entered first) - for every time player id = winner id, and subtract from that the sum of rating_diff from all past events for whenever player id = loser id
-  // sum(select rating_diff from matches where event_id<${req.params.event_id} and player_id=winner_id) - sum(select rating_diff from matches where event_id<${req.params.event_id} and player_id=loser_id) as rating_before group by player_id
-  // with players (pid, pname) as (select distinct player_id,player_name from (select r.player_name, r.player_id,m.winner_id, m.loser_id from ratings r join matches m on r.player_id=m.winner_id or r.player_id=m.loser_id) as temp) select * from players order by pid asc;
-  // select sum(m1.rating_diff)-sum(m2.rating_diff) as tot_diff from matches m1 full outer join matches m2 on m1.winner_id=m2.loser_id;
-  pool.query(
-    `drop table if exists temp;
-    create temporary table temp (pid integer,pname varchar(255),rating_before integer,rating_after integer);
-    do
-    $$
-    declare
-        f record;
-    begin
-        for f in (with players (pid, pname) as (
-            select distinct player_id,player_name
-            from (
-                select r.player_name, r.player_id,m.winner_id, m.loser_id
-                from ratings r join matches m
-                on r.player_id=m.winner_id or r.player_id=m.loser_id
-                where m.event_id=${req.params.event_id}
-            ) as temp
-        ) select pid,pname from players order by pid asc)
-        loop
-            insert into temp select f.pid, f.pname, coalesce((select sum(rating_diff) from matches m where winner_id=f.pid and m.event_id<${req.params.event_id}),0) - coalesce((select sum(rating_diff) from matches m where loser_id=f.pid and m.event_id<${req.params.event_id}),0) as rating_before, coalesce((select sum(rating_diff) from matches m where winner_id=f.pid and m.event_id<=${req.params.event_id}),0) - coalesce((select sum(rating_diff) from matches m where loser_id=f.pid and m.event_id<=${req.params.event_id}),0) as rating_after;
-        end loop;
-    end;
-    $$;
-    select * from temp;`,
-    (err, results) => {
-      if (err) {
-        res.status(500).send('GET event information errored');
-        return;
-      }
-      toRet['ratings'] = results[3].rows;
-      res.status(200).json(toRet);
-    }
-  );
-});
-
-// takes { "edate" : event_date, "ename" : event_name,
-//   “matches” : [ { "winner_id" : winner_id, "loser_id" : loser_id,
-//   "winner_score" : winner_score, "loser_score" : loser_score }, ... ] }
-// calculates the new ratings and updates the database
-app.post('/api/admin/add_event', async (req, res) => {
-  let event = { event_id: -1, matches: '', ratings: '' };
-  // adding event name and date to the events table
-  let results = await pool.query(
-    `insert into events (event_name,event_date) values ('${req.body['ename']}','${req.body['edate']}'); select max(event_id) as m from events;` /*, (err,results) => {
-        // if (err) { /*console.log("hey there was an error: \n" + err);* res.status(500).send("something went wrong"); return;}
-        // console.log("\n\n"+err+"\n\n"+results);
-        // event.event_id = await results[1].rows[0]['m'];
-        // console.log(event);
-    }*/
-  );
-  event.event_id = await results[1].rows[0]['m'];
-
-  for (let match of req.body['matches']) {
-    results = await pool.query(
-      `select rating from ratings where player_id=${match['winner_id']}; select rating from ratings where player_id=${match['loser_id']};`
-    ); //, async (err,results) => {
-    let wr = parseInt(results[0].rows[0]['rating']);
-    let lr = parseInt(results[1].rows[0]['rating']);
-    let pts_ex = get_points_exchanged(wr, lr, 1);
-    // console.log(wr,lr,pts_ex)
-    // console.log(event)
-    // add all the info as another row in the matches array
-    event.matches += `(${event.event_id}, ${match['winner_id']}, ${match['loser_id']}, ${match['winner_score']}, ${match['loser_score']}, ${pts_ex}), `;
-
-    // update both players' ratings in the ratings_arr array
-    event.ratings += `(${match['winner_id']}, ${wr + pts_ex}), (${
-      match['loser_id']
-    }, ${wr + pts_ex}), `;
-  }
-  // console.log(`insert into matches values ${event.matches.substring(0,event.matches.length-2)}`)
-  results = await pool.query(
-    `insert into matches values ${event.matches.substring(
-      0,
-      event.matches.length - 2
-    )}`
-  ); //,(err,results) => {
-  // console.log(results);
-  // });
-
-  results = await pool.query(`
-    update ratings as r set
-        rating = r2.new_rating
-    from (values
-        ${event.ratings.substring(0, event.ratings.length - 2)}
-    ) as r2 (pid,new_rating)
-    where r.player_id=r2.pid
-    `); //, (err,results) => {console.log(err+"\n\n"+results)})
-
-  pool.query(
-    'select event_date, array_agg(event_id) as ids, array_agg(event_name) as names from events group by event_date order by event_date',
-    (err, results) => {
-      if (err) {
-        res.status(500).send('POST new event errored');
-        return;
-      }
-      let toRet = { all_events: [] };
-      if (results) {
-        for (let row of results.rows) {
-          toRet['all_events'].push({
-            date: row['event_date'].toISOString().split('T')[0],
-            events: row['ids'].map((e, i) => ({
-              eid: e,
-              ename: row['names'][i],
-            })),
-          });
-        }
-      }
-      res.status(200).json(toRet);
-    }
-  );
-});
-
-// add new players to the database so they can be selected for matches
-// { "players" : [ { "pname" : player_name, "init_rating" : initial_rating }, ... ] }
-app.post('/api/admin/add_new_players', (req, res) => {
-  let s = '';
-  for (let player of req.body['players']) {
-    s +=
-      "(DEFAULT,'" +
-      player['pname'] +
-      "'," +
-      player['init_rating'] +
-      ',TRUE), ';
-  }
-  pool.query(
-    `insert into ratings values ${s.substring(0, s.length - 2)}`,
-    (err, results) => {
-      if (err) {
-        res.status(500).send('POST new players errored');
-        return;
-      }
-      pool.query(
-        'SELECT player_id as pid, player_name as pname, rating as pr, active FROM ratings ORDER BY active desc, rating desc, player_id asc',
-        (err, results) => {
-          if (err) {
-            res.status(500).send('POST new players errored');
-            return;
-          }
-          let toRet = { players: results.rows };
-          res.status(200).json(toRet);
-        }
-      );
-    }
-  );
-});
-
-// update players' info
-// { "players" : [ { "pid" : player_id, "pname" : player_name, "new_rating" : initial_rating, "active" : active }, ... ] }
-app.put('/api/admin/update_players', (req, res) => {
-  let s = '';
-  for (let player of req.body['players']) {
-    s += `(${player['pid']}, '${player['pname']}', ${player['rating']}, ${player['active']}), `;
-  }
   pool.query(
     `
-    update ratings as r set
-        player_name = r2.pname,
-        rating = r2.new_rating,
-        active = r2.active
-    from (values
-        ${s.substring(0, s.length - 2)}
-    ) as r2 (pid,pname,new_rating,active)
-    where r.player_id=r2.pid
+      SELECT name, date, (
+        SELECT JSON_AGG(agg1) FROM (
+          SELECT winner_id, p1.name AS winner_name, loser_id, p2.name AS loser_name, winner_score, loser_score, rating_change
+          FROM matches
+          INNER JOIN players p1 ON winner_id=p1.id
+          INNER JOIN players p2 ON loser_id=p2.id
+          WHERE event_id=${req.params.event_id}
+        ) AS agg1
+      ) AS matches, (
+        SELECT JSON_AGG(agg2) FROM (
+          SELECT player_id, name, rating_before, rating_after
+          FROM player_histories
+        ) AS agg2
+      ) AS ratings
+      FROM events
+      WHERE id=${req.params.event_id}
     `,
     (err, results) => {
       if (err) {
-        res.status(500).send('PUT update players');
+        res.status(500).send('GET event information errored');
         return;
       }
-      pool.query(
-        'SELECT player_id as pid, player_name as pname, rating as pr, active FROM ratings ORDER BY active desc, rating desc, player_id asc',
-        (err, results) => {
-          if (err) {
-            res.status(500).send('POST new players errored');
-            return;
-          }
-          let toRet = { players: results.rows };
-          res.status(200).json(toRet);
-        }
-      );
+      const toRet = {
+        name: results.rows[0]['name'],
+        date: results.rows[0]['date'].toISOString().split('T')[0],
+        matches: results.rows[0]['matches'],
+        ratings: results.rows[0]['ratings'],
+      };
+      res.status(200).json(toRet);
     }
   );
+});
+
+// Adds a new event by calculating the new ratings and updating tables
+// input
+//    {
+//      "name": event_name,
+//      "date": event_date,
+//      “matches”:
+//        [
+//          {
+//            "winner_id": winner_id,
+//            "loser_id": loser_id,
+//            "winner_score": winner_score,
+//            "loser_score": loser_score
+//          },
+//          ...
+//        ]
+//    }
+// return
+//    [
+//      {
+//        "date": event_date,
+//        "events":
+//          [
+//            {
+//              "id": event_id,
+//              "name": event_name
+//            },
+//            ...
+//          ]
+//      },
+//      ...
+//    ]
+app.post('/api/admin/add_event', async (req, res) => {
+  const client = await pool.connect();
+  let toRet;
+  try {
+    await client.query('BEGIN');
+    const insertQuery = `INSERT INTO events (name, date) VALUES ('${req.body['name']}','${req.body['date']}') RETURNING id`;
+    const event_id = (await client.query(insertQuery)).rows[0]['id'];
+
+    const selectPlayersQuery = `SELECT id, rating FROM players WHERE active=TRUE`;
+    const selectPlayersQueryResults = (await client.query(selectPlayersQuery))
+      .rows;
+    const all_players = {};
+    const updatedPlayerRatings = {};
+    selectPlayersQueryResults.forEach(player => {
+      all_players[player.id] = player.rating;
+      updatedPlayerRatings[player.id] = player.rating;
+    });
+    const matches = [];
+    req.body['matches'].forEach(match => {
+      const winner_rating = all_players[match.winner_id];
+      const loser_rating = all_players[match.loser_id];
+      const rating_change = get_points_exchanged(
+        winner_rating,
+        loser_rating,
+        1
+      );
+      matches.push([
+        event_id,
+        match['winner_id'],
+        match['loser_id'],
+        match['winner_score'],
+        match['loser_score'],
+        rating_change,
+      ]);
+      updatedPlayerRatings[match['winner_id']] += rating_change;
+      updatedPlayerRatings[match['loser_id']] = Math.max(
+        updatedPlayerRatings[match['loser_id']] - rating_change,
+        0
+      );
+    });
+    const insertMatchesQuery = format(
+      `INSERT INTO matches (event_id, winner_id, loser_id, winner_score, loser_score, rating_change) VALUES %s`,
+      matches
+    );
+    await client.query(insertMatchesQuery);
+
+    const updatePlayersQuery = format(
+      `UPDATE players p SET rating=updated_p.rating FROM (VALUES %s) AS updated_p(id, rating) WHERE p.id=updated_p.id`,
+      Object.keys(updatedPlayerRatings).map(id => [
+        id,
+        updatedPlayerRatings[id],
+      ])
+    );
+    await client.query(updatePlayersQuery);
+
+    const eventPlayers = Array.from(
+      new Set(
+        req.body['matches']
+          .map(match => match['winner_id'])
+          .concat(req.body['matches'].map(match => match['loser_id']))
+      )
+    );
+    const insertPlayerHistoriesQuery = format(
+      `INSERT INTO player_histories (player_id, event_id, rating_before, rating_after) VALUES %s`,
+      eventPlayers.map(id => [
+        id,
+        event_id,
+        all_players[id],
+        updatedPlayerRatings[id],
+      ])
+    );
+    await client.query(insertPlayerHistoriesQuery);
+
+    const selectEventsQuery = `SELECT date, ARRAY_AGG(id) AS ids, ARRAY_AGG(name) AS names FROM events GROUP BY date ORDER BY date`;
+    toRet = (await client.query(selectEventsQuery)).rows;
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    res.status(500).send('POST add event errored');
+    return;
+  } finally {
+    client.release();
+    res.status(200).json(toRet);
+  }
+});
+
+// Updates an existing event by calculating the new ratings and updating tables
+// input
+//    {
+//      "id": event_id,
+//      "name": event_name,
+//      "date": event_date,
+//      “matches”:
+//        [
+//          {
+//            "winner_id": winner_id,
+//            "loser_id": loser_id,
+//            "winner_score": winner_score,
+//            "loser_score": loser_score
+//          },
+//          ...
+//        ]
+//    }
+// return
+//    [
+//      {
+//        "date": event_date,
+//        "events":
+//          [
+//            {
+//              "id": event_id,
+//              "name": event_name
+//            },
+//            ...
+//          ]
+//      },
+//      ...
+//    ]
+app.put('/api/admin/update_event', async (req, res) => {
+  const client = await pool.connect();
+  let toRet;
+  const event_id = req.body['id'];
+  const event_name = req.body['name'];
+  const event_date = req.body['date'];
+  const matches = req.body['matches'];
+
+  try {
+    await client.query('BEGIN');
+
+    const updateEventsQuery = `UPDATE events SET name='${event_name}', date='${event_date}' WHERE id=${event_id}`;
+    await client.query(updateEventsQuery);
+
+    const selectPlayersQuery = `SELECT id, rating FROM players WHERE active=TRUE`;
+    const selectPlayersQueryResults = (await client.query(selectPlayersQuery))
+      .rows;
+    let oldPlayerRatings = {};
+    let updatedPlayerRatings = {};
+    selectPlayersQueryResults.forEach(player => {
+      oldPlayerRatings[player.id] = player.rating;
+      updatedPlayerRatings[player.id] = player.rating;
+    });
+    // START
+    await updateEventResults(client, event_id, oldPlayerRatings, updatedPlayerRatings, matches);
+
+    const allFutureEventsQuery = `SELECT id FROM events WHERE date > '${event_date}'`;
+    const futureEventIds = (await client.query(allFutureEventsQuery)).rows.map(row => row.id);
+    futureEventIds.forEach(async id => {
+      oldPlayerRatings = updatedPlayerRatings;
+      updatedPlayerRatings = {...oldPlayerRatings};
+      const selectEventMatchesQuery = `SELECT winner_id, loser_id, winner_score, loser_score FROM matches WHERE event_id=${id}`;
+      const eventMatches = (await client.query(selectEventMatchesQuery)).rows;
+      if (eventMatches.length > 0) {
+        updateEventResults(client, id, oldPlayerRatings, updatedPlayerRatings, eventMatches);
+      }
+    })
+
+
+    const selectEventsQuery = `SELECT date, ARRAY_AGG(id) AS ids, ARRAY_AGG(name) AS names FROM events GROUP BY date ORDER BY date`;
+    toRet = (await client.query(selectEventsQuery)).rows;
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.log(e);
+    res.status(500).send('PUT update event errored');
+    return;
+  } finally {
+    client.release();
+    res.status(200).json(toRet);
+  }
+});
+
+// Adds a new player to the database
+// input
+//   {
+//      "name": name,
+//      "rating": rating,
+//   }
+//
+// returns
+//    [
+//      {
+//        "id": player_ID,
+//        "name": player_name,
+//        "rating": rating,
+//        "active": active
+//      },
+//      ...
+//    ]
+app.post('/api/admin/add_player', async (req, res) => {
+  const client = await pool.connect();
+  let toRet;
+  try {
+    await client.query('BEGIN');
+    const insertQuery = `INSERT INTO players (name, rating, active) VALUES ('${req.body.name}', ${req.body.rating}, TRUE)`;
+    await client.query(insertQuery);
+    const selectQuery = `SELECT * FROM players ORDER BY active DESC, rating DESC, id ASC`;
+    toRet = await client.query(selectQuery);
+    await client.query('COMMIT');
+  } catch (e) {
+  } finally {
+    client.release();
+    res.status(200).json(toRet.rows);
+  }
+});
+
+// Updates a player's info
+// input
+//   {
+//      "id": player_id,
+//      "name": name,
+//      "rating": rating,
+//      "active": active
+//   }
+//
+// returns
+//    [
+//      {
+//        "id": player_ID,
+//        "name": player_name,
+//        "rating": rating,
+//        "active": active
+//      },
+//      ...
+//    ]
+app.put('/api/admin/update_player', async (req, res) => {
+  const client = await pool.connect();
+  let toRet;
+  try {
+    await client.query('BEGIN');
+    const updateQuery = `UPDATE players SET name='${req.body.name}', rating=${req.body.rating}, active=${req.body.active} WHERE id=${req.body.id}`;
+    await client.query(updateQuery);
+    const selectQuery = `SELECT * FROM players ORDER BY active DESC, rating DESC, id ASC`;
+    toRet = (await client.query(selectQuery)).rows;
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    res.status(500).send('PUT update player errored');
+    return;
+  } finally {
+    client.release();
+    res.status(200).json(toRet);
+  }
 });
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../build/index.html'));
 });
 
-/////////////////////////////
+// /////////////////////////////
 
 app.listen(port, () => {
   console.log(`server started on port ${port}`);
