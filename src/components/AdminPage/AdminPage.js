@@ -18,10 +18,10 @@ import {
   fetchEventInfo,
   fetchPlayerInfo,
   fetchPlayers,
-  postCreateNewPlayer,
-  postSubmitEventResults,
-  putUpdatePlayerInfo,
-  putUpdateEventResults,
+  postAddPlayer,
+  postAddEvent,
+  putAddPlayer,
+  putUpdateEvent,
 } from '../../utils/Utils';
 import 'react-datepicker/dist/react-datepicker.css';
 import './AdminPage.css';
@@ -70,25 +70,21 @@ function AdminPage() {
     setShowAddPlayerForm(false);
   };
 
-  const onSubmitAddPlayerForm = async event => {
+  const onSubmitAddPlayeForm = async event => {
     event.preventDefault();
     const name = event.target.elements.formBasicName.value;
     const rating = Number(event.target.elements.formBasicRating.value);
     const reqBody = {
-      players: [
-        {
-          pname: name,
-          init_rating: rating,
-        },
-      ],
+      name: name,
+      rating: rating,
     };
-    const updatedPlayersResponse = await postCreateNewPlayer(reqBody);
-    setPlayerList(updatedPlayersResponse.players);
+    const updatedPlayersResponse = await postAddPlayer(reqBody);
+    setPlayerList(updatedPlayersResponse);
     setShowAddPlayerForm(false);
   };
 
-  const onOpenUpdatePlayerInfoForm = async pid => {
-    const playerInfo = await fetchPlayerInfo(pid);
+  const onOpenUpdatePlayerInfoForm = async id => {
+    const playerInfo = await fetchPlayerInfo(id);
     setPlayerInfo(playerInfo);
     setShowUpdatePlayerInfoForm(true);
   };
@@ -100,19 +96,15 @@ function AdminPage() {
   const onSubmitUpdatePlayerInfoForm = async event => {
     event.preventDefault();
     const name = event.target.elements.formBasicName.value;
-    const rating = Number(event.target.elements.formBasicRating.value);
+    const rating = event.target.elements.formBasicRating.value;
     const reqBody = {
-      players: [
-        {
-          pid: playerInfo.pid,
-          pname: name,
-          rating: rating,
-          active: playerInfo.active,
-        },
-      ],
+      id: playerInfo.id,
+      name: name,
+      rating: rating,
+      active: playerInfo.active,
     };
-    const updatedPlayersResponse = await putUpdatePlayerInfo(reqBody);
-    setPlayerList(updatedPlayersResponse.players);
+    const updatedPlayersResponse = await putAddPlayer(reqBody);
+    setPlayerList(updatedPlayersResponse);
     setShowUpdatePlayerInfoForm(false);
   };
 
@@ -130,21 +122,21 @@ function AdminPage() {
     setEventInfo({});
   };
 
-  const onOpenOldEventResultsForm = async eid => {
-    const eventInfo = await fetchEventInfo(eid);
-    const eventDate = new Date(eventInfo.edate);
+  const onOpenOldEventResultsForm = async id => {
+    const eventInfo = await fetchEventInfo(id);
+    const eventDate = new Date(eventInfo.date);
     const playersObj = {};
     eventInfo.matches.forEach(match => {
       playersObj[match.winner_id] = match.winner_name;
       playersObj[match.loser_id] = match.loser_name;
     });
-    const selectedPlayers = Object.keys(playersObj).map(pid => ({
-      pid: Number(pid),
-      pname: playersObj[pid],
+    const selectedPlayers = Object.keys(playersObj).map(id => ({
+      id: Number(id),
+      name: playersObj[id],
     }));
     setEventInfo({
       ...eventInfo,
-      eid: eid,
+      id: id,
       eventDate: eventDate,
       selectedPlayers: selectedPlayers,
     });
@@ -154,7 +146,7 @@ function AdminPage() {
   const onSubmitResultsForm = async event => {
     event.preventDefault();
     const name = event.target.elements.formBasicName.value;
-    const date = eventInfo.eventDate;
+    const date = eventInfo.eventDate.toISOString().split('T')[0];
     if (!date) {
       alert('Please enter event date.');
       return;
@@ -183,16 +175,16 @@ function AdminPage() {
           let match = {};
           if (p1Score > p2Score) {
             match = {
-              winner_id: playerMatchPairs[i][0].pid,
+              winner_id: playerMatchPairs[i][0].id,
               winner_score: p1Score,
-              loser_id: playerMatchPairs[i][1].pid,
+              loser_id: playerMatchPairs[i][1].id,
               loser_score: p2Score,
             };
           } else if (p2Score > p1Score) {
             match = {
-              winner_id: playerMatchPairs[i][1].pid,
+              winner_id: playerMatchPairs[i][1].id,
               winner_score: p2Score,
-              loser_id: playerMatchPairs[i][0].pid,
+              loser_id: playerMatchPairs[i][0].id,
               loser_score: p1Score,
             };
           }
@@ -210,19 +202,19 @@ function AdminPage() {
     }
 
     const reqBody = {
-      edate: date,
-      ename: name,
+      date: date,
+      name: name,
       matches: matches,
     };
 
     if (showAddResultsForm) {
-      const updatedEventsResponse = await postSubmitEventResults(reqBody);
-      setLeagueList(updatedEventsResponse.all_events);
+      const updatedEventsResponse = await postAddEvent(reqBody);
+      setLeagueList(updatedEventsResponse);
       setShowAddResultsForm(false);
     } else if (showUpdateResultsForm) {
-      reqBody['eid'] = eventInfo['eid'];
-      const updatedEventsResponse = await putUpdateEventResults(reqBody);
-      setLeagueList(updatedEventsResponse.all_events);
+      reqBody.id = eventInfo.id;
+      const updatedEventsResponse = await putUpdateEvent(reqBody);
+      setLeagueList(updatedEventsResponse);
       setShowUpdateResultsForm(false);
     }
     setPlayerList(await fetchPlayers());
@@ -240,8 +232,8 @@ function AdminPage() {
       : [];
     return playerMatchPairs.map((pair, index) => {
       const matchScore =
-        pair[0].pid in formattedMatchResults
-          ? formattedMatchResults[pair[0].pid][pair[1].pid]
+        pair[0].id in formattedMatchResults
+          ? formattedMatchResults[pair[0].id][pair[1].id]
           : '';
       return (
         <Form.Group
@@ -251,7 +243,7 @@ function AdminPage() {
         >
           <Form.Label>
             <h5>
-              {pair[0].pname} vs. {pair[1].pname}
+              {pair[0].name} vs. {pair[1].name}
             </h5>
           </Form.Label>
           <Form.Control
@@ -270,8 +262,8 @@ function AdminPage() {
       flatLeagueList,
       league.events.map((event, index) => ({
         date: league.date,
-        eid: event.eid,
-        ename: event.ename,
+        id: event.id,
+        name: event.name,
         diffDate: index === 0 ? true : false,
       }))
     )
@@ -295,7 +287,7 @@ function AdminPage() {
             <Modal.Header closeButton>
               <Modal.Title>Add a New Player</Modal.Title>
             </Modal.Header>
-            <Form onSubmit={onSubmitAddPlayerForm}>
+            <Form onSubmit={onSubmitAddPlayeForm}>
               <Modal.Body>
                 <Form.Group controlId='formBasicName' className='admin-form'>
                   <Form.Label>
@@ -339,7 +331,7 @@ function AdminPage() {
                   <Form.Control
                     type='input'
                     placeholder='Name'
-                    defaultValue={playerInfo.pname}
+                    defaultValue={playerInfo.name}
                     required
                   />
                 </Form.Group>
@@ -351,7 +343,7 @@ function AdminPage() {
                   <Form.Control
                     type='number'
                     placeholder='Rating'
-                    defaultValue={playerInfo.pr}
+                    defaultValue={playerInfo.rating}
                     required
                   />
                 </Form.Group>
@@ -410,7 +402,7 @@ function AdminPage() {
                   <Form.Control
                     type='input'
                     placeholder='Name'
-                    defaultValue={eventInfo.ename}
+                    defaultValue={eventInfo.name}
                     required
                   />
                 </Form.Group>
@@ -435,13 +427,13 @@ function AdminPage() {
                     <h5>Select Players</h5>
                   </Form.Label>
                   <Multiselect
-                    options={playerList.map(player => {
-                      return { pname: player.pname, pid: player.pid };
+                    options={playerList.filter(player => player.active).map(player => {
+                      return { name: player.name, id: player.id };
                     })}
                     selectedValues={eventInfo.selectedPlayers}
                     onSelect={onChangeSelectedGroupPlayers}
                     onRemove={onChangeSelectedGroupPlayers}
-                    displayValue='pname'
+                    displayValue='name'
                     className='multi-select'
                   />
                 </Form.Group>
@@ -450,8 +442,8 @@ function AdminPage() {
                 {eventInfo.selectedPlayers &&
                   eventInfo.selectedPlayers.length > 1 && (
                     <h5>
-                      If no match results b/w two players, you can leave the
-                      field empty.
+                      If there are no match results b/w two players, you can
+                      leave the field empty.
                     </h5>
                   )}
                 <br />
@@ -464,7 +456,7 @@ function AdminPage() {
                   Close
                 </Button>
                 <Button variant='primary' type='submit'>
-                  Submit Event Results
+                  Add New Event Results
                 </Button>
               </Modal.Footer>
             </Form>
@@ -488,15 +480,15 @@ function AdminPage() {
                 </thead>
                 <tbody>
                   {playerList.map(player => (
-                    <tr key={player.pid}>
+                    <tr key={player.id}>
                       <td>
-                        <Link to={`/player/${player.pid}`}>{player.pname}</Link>
+                        <Link to={`/player/${player.id}`}>{player.name}</Link>
                       </td>
-                      <td>{player.pr}</td>
+                      <td>{player.rating}</td>
                       <td>{player.active ? 'Active' : 'Inactive'}</td>
                       <td>
                         <Button
-                          onClick={() => onOpenUpdatePlayerInfoForm(player.pid)}
+                          onClick={() => onOpenUpdatePlayerInfoForm(player.id)}
                         >
                           Change
                         </Button>
@@ -510,7 +502,7 @@ function AdminPage() {
                 <h1>Event List</h1>
                 <div className='change-button'>
                   <Button onClick={onOpenResultsForm}>
-                    Submit Event Results
+                    Add New Event Results
                   </Button>
                 </div>
               </div>
@@ -524,18 +516,18 @@ function AdminPage() {
                 </thead>
                 <tbody>
                   {flatLeagueList.map(event => (
-                    <tr key={event.eid}>
+                    <tr key={event.id}>
                       {event.diffDate ? (
                         <td>{formatDate(event.date)}</td>
                       ) : (
                         <td></td>
                       )}
                       <td>
-                        <Link to={`/event/${event.eid}`}>{event.ename}</Link>
+                        <Link to={`/event/${event.id}`}>{event.name}</Link>
                       </td>
                       <td>
                         <Button
-                          onClick={() => onOpenOldEventResultsForm(event.eid)}
+                          onClick={() => onOpenOldEventResultsForm(event.id)}
                         >
                           Change Results
                         </Button>

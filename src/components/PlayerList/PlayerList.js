@@ -34,13 +34,13 @@ function PlayerList() {
             </thead>
             <tbody>
               {players
-                .filter((player) => player.active)
-                .map((player) => (
-                  <tr key={player.pid}>
+                .filter(player => player.active)
+                .map(player => (
+                  <tr key={player.id}>
                     <td>
-                      <Link to={`/player/${player.pid}`}>{player.pname}</Link>
+                      <Link to={`/player/${player.id}`}>{player.name}</Link>
                     </td>
-                    <td>{player.pr}</td>
+                    <td>{player.rating}</td>
                   </tr>
                 ))}
             </tbody>

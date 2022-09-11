@@ -3,15 +3,15 @@ import {
   FETCH_EVENTS_URL,
   FETCH_PLAYER_INFO_URL,
   FETCH_PLAYERS_URL,
-  POST_CREATE_NEW_PLAYER_URL,
-  POST_SUBMIT_EVENT_RESULTS,
-  PUT_UPDATE_EVENT_RESULTS,
+  POST_ADD_EVENT,
+  POST_ADD_PLAYER_URL,
+  PUT_UPDATE_EVENT,
   PUT_UPDATE_PLAYER_INFO_URL,
 } from './Constants.js';
 
 export const formatDate = input => {
   const date = new Date(input);
-  return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+  return `${date.getMonth() + 1}/${date.getDate() + 1}/${date.getFullYear()}`;
 };
 
 export const formatMatchResults = matches => {
@@ -35,54 +35,53 @@ export const formatMatchResults = matches => {
   return formattedResults;
 };
 
-export const fetchEventInfo = async eid => {
-  return fetch(`${FETCH_EVENT_INFO_URL}/${eid}`).then(res => res.json());
+export const fetchEventInfo = async id => {
+  console.log(`${FETCH_EVENT_INFO_URL}/${id}`);
+  return fetch(`${FETCH_EVENT_INFO_URL}/${id}`).then(res => res.json());
 };
 
 export const fetchEvents = async () => {
   return fetch(FETCH_EVENTS_URL)
-    .then(res => res.json())
-    .then(data => data.all_events);
+    .then(res => res.json());
 };
 
-export const fetchPlayerInfo = async pid => {
-  return fetch(`${FETCH_PLAYER_INFO_URL}/${pid}`).then(res => res.json());
+export const fetchPlayerInfo = async id => {
+  return fetch(`${FETCH_PLAYER_INFO_URL}/${id}`).then(res => res.json());
 };
 
 export const fetchPlayers = async () => {
   return fetch(FETCH_PLAYERS_URL)
-    .then(res => res.json())
-    .then(data => data.players);
+    .then(res => res.json());
 };
 
-export const postSubmitEventResults = async body => {
-  return fetch(POST_SUBMIT_EVENT_RESULTS, {
+export const postAddEvent = async body => {
+  return fetch(POST_ADD_EVENT, {
     method: 'POST',
     body: JSON.stringify(body),
     headers: { 'Content-Type': 'application/json' },
   }).then(res => res.json());
 };
 
-export const putUpdateEventResults = async body => {
-  return fetch(PUT_UPDATE_EVENT_RESULTS, {
-    method: 'post',
-    body: JSON.stringify(body),
-    headers: { 'content-type': 'application/json' },
-  }).then(res => res.json());
-};
-
-export const postCreateNewPlayer = async body => {
-  return fetch(POST_CREATE_NEW_PLAYER_URL, {
+export const postAddPlayer = async body => {
+  return fetch(POST_ADD_PLAYER_URL, {
     method: 'POST',
     body: JSON.stringify(body),
     headers: { 'Content-Type': 'application/json' },
   }).then(res => res.json());
 };
 
-export const putUpdatePlayerInfo = async body => {
+export const putAddPlayer = async body => {
   return fetch(PUT_UPDATE_PLAYER_INFO_URL, {
     method: 'PUT',
     body: JSON.stringify(body),
     headers: { 'Content-Type': 'application/json' },
+  }).then(res => res.json());
+};
+
+export const putUpdateEvent = async body => {
+  return fetch(PUT_UPDATE_EVENT, {
+    method: 'post',
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
   }).then(res => res.json());
 };

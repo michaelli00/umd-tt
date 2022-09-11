@@ -12,20 +12,21 @@ function EventPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const eid = Number(window.location.pathname.match(/\/(\d+)/)[1]);
+    const id = Number(window.location.pathname.match(/\/(\d+)/)[1]);
     let loadEventInfo = async () => {
-      setEventInfo(await fetchEventInfo(eid));
+      setEventInfo(await fetchEventInfo(id));
       setLoading(false);
     };
 
     loadEventInfo();
   }, []);
+  console.log(eventInfo);
 
   return (
     <Container className='EventPage'>
       {!loading ? (
         <React.Fragment>
-          <h1>{`${formatDate(eventInfo.edate)} ${eventInfo.ename}`}</h1>
+          <h1>{`${formatDate(eventInfo.date)} ${eventInfo.name}`}</h1>
           <br />
           <h1>Matches</h1>
           <Table striped bordered hover size='sm'>
@@ -51,7 +52,7 @@ function EventPage() {
                     </Link>
                   </td>
                   <td>{`${matchInfo.winner_score}-${matchInfo.loser_score}`}</td>
-                  <td>{matchInfo.rating_diff}</td>
+                  <td>{matchInfo.rating_change}</td>
                 </tr>
               ))}
             </tbody>
@@ -68,10 +69,10 @@ function EventPage() {
             </thead>
             <tbody>
               {eventInfo.ratings.map(ratingInfo => (
-                <tr key={ratingInfo.pid}>
+                <tr key={ratingInfo.player_id}>
                   <td>
-                    <Link to={`/player/${ratingInfo.pid}`}>
-                      {ratingInfo.pname}
+                    <Link to={`/player/${ratingInfo.player_id}`}>
+                      {ratingInfo.name}
                     </Link>
                   </td>
                   <td>{ratingInfo.rating_before}</td>

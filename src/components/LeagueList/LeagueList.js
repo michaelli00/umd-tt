@@ -33,13 +33,13 @@ function LeagueList() {
               </tr>
             </thead>
             <tbody>
-              {leagueList.map((league) => (
-                <tr key={league.events[0].eid}>
+              {leagueList.map(league => (
+                <tr key={league.events[0].id}>
                   <td>{formatDate(league.date)}</td>
                   <td>
                     {league.events.map((event) => (
-                      <Link to={`/event/${event.eid}`} key={event.eid}>
-                        <span className='event-name'>{event.ename}</span>
+                      <Link to={`/event/${event.id}`} key={event.id}>
+                        <span className='event-name'>{event.name}</span>
                       </Link>
                     ))}
                   </td>

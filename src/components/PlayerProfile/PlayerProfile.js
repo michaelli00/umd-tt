@@ -12,9 +12,9 @@ function PlayerProfile() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const pid = Number(window.location.pathname.match(/\/(\d+)/)[1]);
+    const id = Number(window.location.pathname.match(/\/(\d+)/)[1]);
     let loadPlayerInfo = async () => {
-      setPlayerInfo(await fetchPlayerInfo(pid));
+      setPlayerInfo(await fetchPlayerInfo(id));
       setLoading(false);
     };
 
@@ -25,12 +25,12 @@ function PlayerProfile() {
     <Container className='PlayerProfile'>
       {!loading ? (
         <React.Fragment>
-          <h1> {playerInfo.pname} </h1>
+          <h1> {playerInfo.name} </h1>
           <div className='player-info'>
-            <b>Player ID</b>: &nbsp; {playerInfo.pid}
+            <b>Player ID</b>: &nbsp; {playerInfo.id}
           </div>
           <div className='player-info'>
-            <b>Player Rating</b>: &nbsp; {playerInfo.pr}
+            <b>Player Rating</b>: &nbsp; {playerInfo.rating}
           </div>
           <div className='player-info'>
             <b>Player Active</b>: &nbsp;
