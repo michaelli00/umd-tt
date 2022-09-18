@@ -1,15 +1,17 @@
 const get_points_exchanged = require('./rating_algo');
 
 const {
-  SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY,
-  SELECT_FUTURE_EVENT_IDS_WITH_EVENT_ID_QUERY,
+  SELECT_PLAYER_RATINGS_BEFORE_DATE_TIME_QUERY,
+  SELECT_FUTURE_EVENT_IDS_AND_DATE_TIME_WITH_EVENT_ID_QUERY,
+  SELECT_FUTURE_EVENT_IDS_AND_DATE_TIME_WITHOUT_EVENT_ID_QUERY,
+  SELECT_PLAYER_RATINGS_ON_DATE_TIME_QUERY,
   UPDATE_MATCHES_QUERY,
-  UPDATE_PLAYER_HISTORIES_WITH_DATE_QUERY,
-  UPDATE_PLAYER_HISTORIES_WITHOUT_DATE_QUERY,
+  UPDATE_PLAYER_HISTORIES_WITH_DATE_TIME_QUERY,
+  UPDATE_PLAYER_HISTORIES_WITHOUT_DATE_TIME_QUERY,
 } = require('./Constant');
 
-const getPlayerRatingsBeforeDate = async (client, date) => {
-  return (await client.query(SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY(date)))
+const getPlayerRatingsBeforeDateTime = async (client, dateTime) => {
+  return (await client.query(SELECT_PLAYER_RATINGS_BEFORE_DATE_TIME_QUERY(dateTime)))
     .rows;
 };
 
@@ -41,17 +43,17 @@ const formatMatches = (
   return formattedMatches;
 };
 
-const getFutureEventIds = async (client, eventDate, eventId = null) => {
+const getFutureEventIds = async (client, eventDateTime, eventId = null) => {
   if (eventId === null) {
     return (
       await client.query(
-        SELECT_FUTURE_EVENT_IDS_WITHOUT_EVENT_ID_QUERY(eventDate)
+        SELECT_FUTURE_EVENT_IDS_AND_DATE_TIME_WITHOUT_EVENT_ID_QUERY(eventDateTime)
       )
     ).rows.map(row => row.id);
   }
   return (
     await client.query(
-      SELECT_FUTURE_EVENT_IDS_WITH_EVENT_ID_QUERY(eventDate, eventId)
+      SELECT_FUTURE_EVENT_IDS_AND_DATE_TIME_WITH_EVENT_ID_QUERY(eventDateTime, eventId)
     )
   ).rows.map(row => row.id);
 };
@@ -62,7 +64,8 @@ const updateEventResults = async (
   oldPlayerRatings,
   updatedPlayerRatings,
   matches,
-  date = null
+  dateTime,
+  updatePlayerHistory
 ) => {
   const formattedMatches = formatMatches(
     matches,
@@ -72,9 +75,17 @@ const updateEventResults = async (
 
   await client.query(UPDATE_MATCHES_QUERY(formattedMatches));
 
+  const selectPlayersQueryResults = (
+    await client.query(SELECT_PLAYER_RATINGS_ON_DATE_TIME_QUERY(dateTime))
+  ).rows;
+  selectPlayersQueryResults.forEach(player => {
+    oldPlayerRatings[player.id] = player.rating;
+    updatedPlayerRatings[player.id] = player.rating;
+  });
+
   let updatePlayerHistoriesQuery;
-  if (date === null) {
-    updatePlayerHistoriesQuery = UPDATE_PLAYER_HISTORIES_WITHOUT_DATE_QUERY(
+  if (updatePlayerHistory) {
+    updatePlayerHistoriesQuery = UPDATE_PLAYER_HISTORIES_WITHOUT_DATE_TIME_QUERY(
       eventPlayers.map(id => [
         id,
         eventId,
@@ -83,11 +94,11 @@ const updateEventResults = async (
       ])
     );
   } else {
-    updatePlayerHistoriesQuery = UPDATE_PLAYER_HISTORIES_WITH_DATE_QUERY(
+    updatePlayerHistoriesQuery = UPDATE_PLAYER_HISTORIES_WITH_DATE_TIME_QUERY(
       eventPlayers.map(id => [
         id,
         eventId,
-        date,
+        dateTime,
         oldPlayerRatings[id],
         updatedPlayerRatings[id],
       ])
@@ -97,7 +108,7 @@ const updateEventResults = async (
 };
 
 module.exports = {
-  getPlayerRatingsBeforeDate,
+  getPlayerRatingsBeforeDateTime,
   formatMatches,
   getFutureEventIds,
   updateEventResults,

@@ -1,3 +1,4 @@
+/* TODO add check for when event_num = 0 */
 const express = require('express');
 const app = express();
 const cors = require('cors');
@@ -5,27 +6,29 @@ const path = require('path');
 const pool = require('./db');
 
 const {
-  getPlayerRatingsBeforeDate,
+  getPlayerRatingsBeforeDateTime,
   getFutureEventIds,
   formatMatches,
   updateEventResults,
 } = require('./Utils');
 
 const {
-  DEFAULT_DATE,
+  DEFAULT_DATE_TIME,
   SELECT_PLAYERS_QUERY,
   SELECT_PLAYER_INFO_QUERY,
   SELECT_EVENTS_QUERY,
   SELECT_EVENT_INFO_QUERY,
   SELECT_EVENT_MATCHES_QUERY,
+  SELECT_MOST_UPDATED_PLAYER_RATINGS_QUERY,
   INSERT_INTO_EVENTS_QUERY,
   INSERT_INTO_MATCHES_QUERY,
   INSERT_INTO_PLAYER_HISTORIES_QUERY,
   INSERT_INTO_PLAYERS_QUERY,
   UPDATE_PLAYERS_QUERY,
   UPDATE_EVENTS_QUERY,
-  SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY,
-  SELECT_FUTURE_EVENT_IDS_WITH_EVENT_ID_QUERY,
+  UPDATE_PLAYER_QUERY,
+  SELECT_PLAYER_RATINGS_BEFORE_DATE_TIME_QUERY,
+  SELECT_FUTURE_EVENT_IDS_AND_DATE_TIME_WITH_EVENT_ID_QUERY,
 } = require('./Constant');
 
 const port = process.env.PORT || 5000;
@@ -67,7 +70,7 @@ app.get('/api/players', (req, res) => {
 //          {
 //            "id": event_id,
 //            "event_num": event_num,
-//            "date": event_date,
+//            "date_time": event_date_time,
 //            "rating_before": rating_before,
 //            "rating_after": rating_after
 //          }, ...
@@ -96,7 +99,7 @@ app.get('/api/player/:id', (req, res) => {
 // returns
 //    [
 //      {
-//        "date": event_date,
+//        "date_time": event_date_time,
 //        "events":
 //          [
 //            {
@@ -115,7 +118,7 @@ app.get('/api/events', (req, res) => {
       return;
     }
     const toRet = results.rows.map(row => ({
-      date: row.date.toISOString().split('T')[0],
+      date_time: row.date_time.toISOString().split('T')[0],
       events: row.ids.map((id, index) => ({
         id: id,
         event_num: row.event_nums[index],
@@ -128,7 +131,7 @@ app.get('/api/events', (req, res) => {
 // returns
 //    {
 //      “event_num”: event_num,
-//      “date”: event_date,
+//      “date_time”: event_date_time,
 //      "matches":
 //        [
 //          {
@@ -164,7 +167,7 @@ app.get('/api/event/:event_id', (req, res) => {
     const dataRow = results.rows[0];
     const toRet = {
       event_num: dataRow.event_num,
-      date: dataRow.date.toISOString().split('T')[0],
+      date_time: dataRow.date_time.toISOString().split('T')[0],
       matches: dataRow.matches ? dataRow.matches : [],
       ratings: dataRow.ratings ? dataRow.ratings : [],
     };
@@ -176,7 +179,7 @@ app.get('/api/event/:event_id', (req, res) => {
 // input
 //    {
 //      "event_num": event_num,
-//      "date": event_date,
+//      "date_time": event_date_time,
 //      “matches”:
 //        [
 //          {
@@ -191,7 +194,7 @@ app.get('/api/event/:event_id', (req, res) => {
 // return
 //    [
 //      {
-//        "date": event_date,
+//        "date_time": event_date_time,
 //        "events":
 //          [
 //            {
@@ -205,7 +208,7 @@ app.get('/api/event/:event_id', (req, res) => {
 //    ]
 app.post('/api/admin/add_event', async (req, res) => {
   const client = await pool.connect();
-  const eventDate = req.body.date;
+  const eventDateTime = req.body.date_time;
   const eventNum = req.body.event_num;
   const matches = req.body.matches;
   let toRet;
@@ -214,16 +217,16 @@ app.post('/api/admin/add_event', async (req, res) => {
 
     // Insert into events
     const eventId = (
-      await client.query(INSERT_INTO_EVENTS_QUERY(eventNum, eventDate))
+      await client.query(INSERT_INTO_EVENTS_QUERY(eventNum, eventDateTime))
     ).rows[0].id;
 
-    // Get running mapping of all player ratings BEFORE the old date
-    const selectPlayerRatingsQueryResults = await getPlayerRatingsBeforeDate(
+    // Get running mapping of all player ratings BEFORE the old date time
+    const selectPlayerRatingsQueryResults = await getPlayerRatingsBeforeDateTime(
       client,
-      eventDate
+      eventDateTime
     );
-    const oldPlayerRatings = {};
-    const updatedPlayerRatings = {};
+    let oldPlayerRatings = {};
+    let updatedPlayerRatings = {};
     selectPlayerRatingsQueryResults.forEach(player => {
       oldPlayerRatings[player.id] = player.rating;
       updatedPlayerRatings[player.id] = player.rating;
@@ -253,15 +256,15 @@ app.post('/api/admin/add_event', async (req, res) => {
         eventPlayerSet.map(id => [
           id,
           eventId,
-          `\'${eventDate}\'`,
+          `\'${eventDateTime}\'`,
           oldPlayerRatings[id],
           updatedPlayerRatings[id],
-        ])
+       ])
       )
     );
 
     // Cascade update
-    const futureEventIds = await getFutureEventIds(client, eventId, eventDate);
+    const futureEventIds = await getFutureEventIds(client, eventDateTime, eventId);
     futureEventIds.forEach(async id => {
       oldPlayerRatings = updatedPlayerRatings;
       updatedPlayerRatings = { ...oldPlayerRatings };
@@ -278,7 +281,14 @@ app.post('/api/admin/add_event', async (req, res) => {
       }
     });
 
-    // After cascade updating results, update the final player ratings
+    // After cascade updating results, retrieve the current ratings and update the final player ratings
+    const mostUpdatedPlayerRatings = (
+      await client.query(SELECT_MOST_UPDATED_PLAYER_RATINGS_QUERY)
+    ).rows;
+    mostUpdatedPlayerRatings.forEach(player => {
+      oldPlayerRatings[player.id] = player.rating;
+      updatedPlayerRatings[player.id] = player.rating;
+    });
     await client.query(
       UPDATE_PLAYERS_QUERY(
         Object.keys(updatedPlayerRatings).map(id => [
@@ -290,7 +300,7 @@ app.post('/api/admin/add_event', async (req, res) => {
 
     // Get return query
     toRet = (await client.query(SELECT_EVENTS_QUERY)).rows.map(row => ({
-      date: row.date.toISOString().split('T')[0],
+      date_time: row.date_time.toISOString().split('T')[0],
       events: row.ids.map((id, index) => ({
         id: id,
         event_num: row.event_nums[index],
@@ -313,7 +323,7 @@ app.post('/api/admin/add_event', async (req, res) => {
 //    {
 //      "id": event_id,
 //      "event_num": event_num,
-//      "date": event_date,
+//      "date_time": event_date_time,
 //      “matches”:
 //        [
 //          {
@@ -328,7 +338,7 @@ app.post('/api/admin/add_event', async (req, res) => {
 // return
 //    [
 //      {
-//        "date": event_date,
+//        "date_time": event_date_time,
 //        "events":
 //          [
 //            {
@@ -344,7 +354,7 @@ app.put('/api/admin/update_event', async (req, res) => {
   const client = await pool.connect();
   const eventId = req.body.id;
   const eventNum = req.body.event_num;
-  const eventDate = req.body.date;
+  const eventDateTime = req.body.date_time;
   const matches = req.body.matches;
   let toRet;
 
@@ -355,14 +365,14 @@ app.put('/api/admin/update_event', async (req, res) => {
       .rows[0];
     // TODO if only eventNum changes, nothing to do
     const minDate =
-      new Date(eventDate) <= new Date(oldEventInfo.date)
-        ? eventDate
-        : oldEventInfo.date.toISOString().split('T')[0];
+      new Date(eventDateTime) <= new Date(oldEventInfo.date_time)
+        ? eventDateTime
+        : oldEventInfo.date_time.toISOString().split('T')[0];
 
-    await client.query(UPDATE_EVENTS_QUERY(eventId, eventNum, eventDate));
+    await client.query(UPDATE_EVENTS_QUERY(eventId, eventNum, eventDateTime));
 
     const selectPlayersQueryResults = (
-      await client.query(SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY(minDate))
+      await client.query(SELECT_PLAYER_RATINGS_BEFORE_DATE_TIME_QUERY(minDateTime))
     ).rows;
     let oldPlayerRatings = {};
     let updatedPlayerRatings = {};
@@ -371,38 +381,48 @@ app.put('/api/admin/update_event', async (req, res) => {
       updatedPlayerRatings[player.id] = player.rating;
     });
 
-    const futureEventIds = (
+    const futureEventIdsAndDateTimes = (
       await client.query(
-        SELECT_FUTURE_EVENT_IDS_WITH_EVENT_ID_QUERY(minDate, eventId)
+        SELECT_FUTURE_EVENT_IDS_AND_DATE_TIME_WITH_EVENT_ID_QUERY(minDateTime, eventId)
       )
-    ).rows.map(row => row.id);
-    futureEventIds.forEach(async id => {
+    ).rows.map(row => ({id: row.id, date_time: row.date_time }));
+    futureEventIdsAndDateTimes.forEach(async row => {
       oldPlayerRatings = updatedPlayerRatings;
       updatedPlayerRatings = { ...oldPlayerRatings };
-      if (id === eventId) {
+      if (row.id === eventId) {
         updateEventResults(
           client,
-          id,
+          row.id,
           oldPlayerRatings,
           updatedPlayerRatings,
           matches,
-          eventDate
+          row.date_time,
+          true
         );
       } else {
-        const eventMatches = await client.query(SELECT_EVENT_MATCHES_QUERY(id));
+        const eventMatches = await client.query(SELECT_EVENT_MATCHES_QUERY(row));
         if (eventMatches.length > 0) {
           updateEventResults(
             client,
-            id,
+            row.id,
             oldPlayerRatings,
             updatedPlayerRatings,
-            eventMatches
+            eventMatches,
+            row.date_time,
+            false
           );
         }
       }
     });
 
-    // After cascade updating results, update the final player ratings
+    // After cascade updating results, retrieve the current ratings and update the final player ratings
+    const mostUpdatedPlayerRatings = (
+      await client.query(SELECT_MOST_UPDATED_PLAYER_RATINGS_QUERY)
+    ).rows;
+    mostUpdatedPlayerRatings.forEach(player => {
+      oldPlayerRatings[player.id] = player.rating;
+      updatedPlayerRatings[player.id] = player.rating;
+    });
     await client.query(
       UPDATE_PLAYERS_QUERY(
         Object.keys(updatedPlayerRatings).map(id => [
@@ -414,7 +434,7 @@ app.put('/api/admin/update_event', async (req, res) => {
 
     // Get return query
     toRet = (await client.query(SELECT_EVENTS_QUERY)).rows.map(row => ({
-      date: row.date.toISOString().split('T')[0],
+      date_time: row.date_time.toISOString().split('T')[0],
       events: row.ids.map((id, index) => ({
         id: id,
         event_num: row.event_nums[index],
@@ -459,12 +479,11 @@ app.post('/api/admin/add_player', async (req, res) => {
     const playerId = (
       await client.query(INSERT_INTO_PLAYERS_QUERY(playerName, playerRating))
     ).rows[0].id;
-    console.log(playerId);
 
-    // When we create a player, set a default date for player_histories table
+    // When we create a player, set a default date time for player_histories table
     await client.query(
       INSERT_INTO_PLAYER_HISTORIES_QUERY([
-        [playerId, 0, DEFAULT_DATE, playerRating, playerRating],
+        [playerId, 0, `\'${DEFAULT_DATE_TIME}\'`, playerRating, playerRating],
       ])
     );
 
@@ -481,49 +500,59 @@ app.post('/api/admin/add_player', async (req, res) => {
   res.status(200).json(toRet);
 });
 
-/**/
-/* // Updates a player's info */
-/* // input */
-/* //   { */
-/* //      "id": player_id, */
-/* //      "name": name, */
-/* //      "rating": rating, */
-/* //      "active": active */
-/* //   } */
-/* // */
-/* // returns */
-/* //    [ */
-/* //      { */
-/* //        "id": player_ID, */
-/* //        "name": player_name, */
-/* //        "rating": rating, */
-/* //        "active": active */
-/* //      }, */
-/* //      ... */
-/* //    ] */
-/* app.put('/api/admin/update_player', async (req, res) => { */
-/*   const playerId = req.body.id; */
-/*   const playerName = req.body.name; */
-/*   const playerRating = req.body.rating; */
-/*   const playerActive = req.body.active; */
-/*   const client = await pool.connect(); */
-/*   let toRet; */
-/*   try { */
-/*     await client.query('BEGIN'); */
-/*     const updateQuery = `UPDATE players SET name='${playerName}', rating=${playerRating}, active=${playerActive} WHERE id=${playerId}`; */
-/*     await client.query(updateQuery); */
-/*     const selectQuery = `SELECT * FROM players ORDER BY active DESC, rating DESC, id ASC`; */
-/*     toRet = (await client.query(selectQuery)).rows; */
-/*     await client.query('COMMIT'); */
-/*   } catch (e) { */
-/*     await client.query('ROLLBACK'); */
-/*     res.status(500).send('PUT update player errored'); */
-/*     return; */
-/*   } finally { */
-/*     client.release(); */
-/*   } */
-/*   res.status(200).json(toRet); */
-/* }); */
+// Updates a player's info
+// input
+//   {
+//      "id": player_id,
+//      "name": name,
+//      "rating": rating,
+//      "active": active
+//   }
+//
+// returns
+//    [
+//      {
+//        "id": player_ID,
+//        "name": player_name,
+//        "rating": rating,
+//        "active": active
+//      },
+//      ...
+//    ]
+app.put('/api/admin/update_player', async (req, res) => {
+  const { id, name, rating, active } = req.body;
+  const client = await pool.connect();
+  let toRet;
+  try {
+    const currDateTime = new Date();
+    await client.query('BEGIN');
+    const oldRating = await client.query(SELECT_PLAYER_INFO_QUERY(id));
+    await client.query(UPDATE_PLAYER_QUERY(id, name, rating, active));
+
+    // Create a dummy event for the player rating update
+    if (rating !== oldRating) {
+      const eventId = (
+        await client.query(INSERT_INTO_EVENTS_QUERY(0, currDateTime))
+      ).rows[0].id;
+      await client.query(
+        INSERT_INTO_PLAYER_HISTORIES_QUERY([
+          [id, eventId, `\'${currDateTime}\'`, rating, rating],
+        ])
+      );
+    }
+
+    toRet = (await client.query(SELECT_PLAYERS_QUERY)).rows;
+    await client.query('COMMIT');
+  } catch (err) {
+    console.log(err);
+    await client.query('ROLLBACK');
+    res.status(500).send('PUT update player errored');
+    return;
+  } finally {
+    client.release();
+  }
+  res.status(200).json(toRet);
+});
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../build/index.html'));
