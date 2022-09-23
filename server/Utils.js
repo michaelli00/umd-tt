@@ -1,33 +1,11 @@
 const get_points_exchanged = require('./rating_algo');
 
 const {
-  SELECT_FUTURE_EVENT_IDS_AND_DATE_WITH_EVENT_ID_QUERY,
-  SELECT_FUTURE_EVENT_IDS_AND_DATE_WITHOUT_EVENT_ID_QUERY,
+  SELECT_FUTURE_EVENT_IDS_AND_DATES_QUERY,
+  SELECT_FUTURE_EVENT_IDS_AND_DATES_EXCLUDING_EVENT_ID_QUERY,
   SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY,
-  SELECT_PLAYER_RATINGS_BEFORE_DATE_EXCLUDING_EVENT_ID_QUERY,
-  UPDATE_MATCHES_QUERY,
-  UPDATE_PLAYER_HISTORIES_WITH_DATE_QUERY,
   UPDATE_PLAYER_HISTORIES_WITHOUT_DATE_QUERY,
 } = require('./Constant');
-
-const getPlayerRatingsBeforeDate = async (client, date, eventId = null) => {
-  let rows = [];
-  if (eventId === null) {
-    rows = (await client.query(SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY, [date]))
-      .rows;
-  } else {
-    rows = (
-      await client.query(
-        SELECT_PLAYER_RATINGS_BEFORE_DATE_EXCLUDING_EVENT_ID_QUERY,
-        [date, eventId]
-      )
-    ).rows;
-  }
-  return rows.map(row => ({
-    id: row.id,
-    rating: row.adjusted_rating ? row.adjusted_rating : row.rating_after,
-  }));
-};
 
 const calculateAndFormatMatches = (
   eventId,
@@ -57,32 +35,59 @@ const calculateAndFormatMatches = (
   return formattedMatches;
 };
 
+// Returns if two match lists are the same
+const areMatchListsDifferent = (matches1, matches2) => {
+  if (matches1.length !== matches2.length) {
+    return true;
+  }
+  matches1.forEach(match1 => {
+    if (
+      !matches2.some(
+        match2 =>
+          match1.winner_id === match2.winner_id &&
+          match1.loser_id === match2.loser_id &&
+          match1.winner_score === match2.winner_score &&
+          match1.loser_score === match2.loser_score
+      )
+    ) {
+      return true;
+    }
+  });
+  return false;
+};
+
 const getFutureEventIdsAndDates = async (client, eventDate, eventId = null) => {
+  // For update events, we want to calculate the target event ID in the cascade update
   if (eventId === null) {
     return (
-      await client.query(
-        SELECT_FUTURE_EVENT_IDS_AND_DATE_WITHOUT_EVENT_ID_QUERY,
-        [eventDate]
-      )
+      await client.query(SELECT_FUTURE_EVENT_IDS_AND_DATES_QUERY, [eventDate])
     ).rows;
   }
+  // For insert events, we DON'T want to calculate the target event ID since it has already been calculated
   return (
-    await client.query(SELECT_FUTURE_EVENT_IDS_AND_DATE_WITH_EVENT_ID_QUERY, [
-      eventDate,
-      eventId,
-    ])
+    await client.query(
+      SELECT_FUTURE_EVENT_IDS_AND_DATES_EXCLUDING_EVENT_ID_QUERY,
+      [eventDate, eventId]
+    )
   ).rows;
 };
+
+const getPlayerRatingsBeforeDate = async (client, date) =>
+  (
+    await client.query(SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY, [date])
+  ).rows.map(row => ({
+    id: row.id,
+    rating: row.adjusted_rating ? row.adjusted_rating : row.rating_after,
+  }));
 
 const updateEventResults = async (
   client,
   eventId,
   oldPlayerRatings,
   updatedPlayerRatings,
-  matches,
-  date
+  matches
 ) => {
-  await calculateAndFormatMatches(
+  calculateAndFormatMatches(
     eventId,
     matches,
     oldPlayerRatings,
@@ -106,8 +111,9 @@ const updateEventResults = async (
 };
 
 module.exports = {
-  getPlayerRatingsBeforeDate,
+  areMatchListsDifferent,
   calculateAndFormatMatches,
   getFutureEventIdsAndDates,
+  getPlayerRatingsBeforeDate,
   updateEventResults,
 };

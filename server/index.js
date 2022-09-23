@@ -10,17 +10,21 @@ const {
   getPlayerRatingsBeforeDate,
   getFutureEventIdsAndDates,
   updateEventResults,
+  areMatchListsDifferent,
 } = require('./Utils');
 
 const {
+  APP_DOES_NOT_SUPPORT_MESSAGE,
   DEFAULT_DATE,
   SELECT_ADJUSTED_RATINGS_FROM_EVENT_ID_QUERY,
-  SELECT_EVENT_INFO_QUERY,
+  SELECT_EVENT_INFO_WITH_PLAYER_NAMES_QUERY,
+  SELECT_EVENT_INFO_WITHOUT_PLAYER_NAMES_QUERY,
   SELECT_EVENT_MATCHES_QUERY,
   SELECT_EVENTS_QUERY,
   SELECT_PLAYER_INFO_QUERY,
   SELECT_PLAYER_INFO_WITH_LAST_EVENT_QUERY,
-  SELECT_PLAYERS_QUERY,
+  SELECT_ACTIVE_PLAYERS_QUERY,
+  SELECT_ALL_PLAYERS_QUERY,
   INSERT_INTO_EVENTS_QUERY,
   INSERT_INTO_MATCHES_QUERY,
   INSERT_INTO_PLAYER_HISTORIES_QUERY,
@@ -46,12 +50,34 @@ app.use(express.json());
 //        "id": player_id,
 //        "name": player_name,
 //        "rating": rating,
-//        "active": active
+//        "active": true
 //      },
 //      ...
 //    ]
 app.get('/api/players', (req, res) => {
-  pool.query(SELECT_PLAYERS_QUERY, (err, results) => {
+  pool.query(SELECT_ACTIVE_PLAYERS_QUERY, (err, results) => {
+    if (err) {
+      console.log(err);
+      res.status(500).send('GET players list errored');
+      return;
+    }
+    const toRet = results.rows;
+    res.status(200).json(toRet);
+  });
+});
+
+// returns
+//    [
+//      {
+//        "id": player_id,
+//        "name": player_name,
+//        "rating": rating,
+//        "active": active
+//      },
+//      ...
+//    ]
+app.get('/api/all_players', (req, res) => {
+  pool.query(SELECT_ALL_PLAYERS_QUERY, (err, results) => {
     if (err) {
       console.log(err);
       res.status(500).send('GET players list errored');
@@ -87,8 +113,9 @@ app.get('/api/player/:id', (req, res) => {
       console.log(err);
       res.status(500).send('GET player information errored');
       return;
-    } else if (results.rows.length != 1) {
+    } else if (results.rows.length !== 1) {
       res.status(404).send('GET player information invalid player id');
+      return;
     }
     const dataRow = results.rows[0];
     const toRet = {
@@ -165,23 +192,28 @@ app.get('/api/events', (req, res) => {
 //    }
 app.get('/api/event/:event_id', (req, res) => {
   const eventId = req.params.event_id;
-  pool.query(SELECT_EVENT_INFO_QUERY, [eventId], (err, results) => {
-    if (err) {
-      console.log(err);
-      res.status(500).send('GET event information errored');
-      return;
-    } else if (results.rows.length != 1) {
-      res.status(404).send('GET event information invalid event id');
+  pool.query(
+    SELECT_EVENT_INFO_WITH_PLAYER_NAMES_QUERY,
+    [eventId],
+    (err, results) => {
+      if (err) {
+        console.log(err);
+        res.status(500).send('GET event information errored');
+        return;
+      } else if (results.rows.length != 1) {
+        res.status(404).send('GET event information invalid event id');
+        return;
+      }
+      const dataRow = results.rows[0];
+      const toRet = {
+        event_num: dataRow.event_num,
+        date: dataRow.date,
+        matches: dataRow.matches ? dataRow.matches : [],
+        ratings: dataRow.ratings ? dataRow.ratings : [],
+      };
+      res.status(200).json(toRet);
     }
-    const dataRow = results.rows[0];
-    const toRet = {
-      event_num: dataRow.event_num,
-      date: dataRow.date,
-      matches: dataRow.matches ? dataRow.matches : [],
-      ratings: dataRow.ratings ? dataRow.ratings : [],
-    };
-    res.status(200).json(toRet);
-  });
+  );
 });
 
 // Adds a new event by calculating the new ratings and updating tables
@@ -228,7 +260,10 @@ app.post('/api/admin/add_event', async (req, res) => {
     ).rows[0].id;
 
     // Get running mapping of all player ratings before the event date
-    const playerRatings = await getPlayerRatingsBeforeDate(client, eventDateString);
+    const playerRatings = await getPlayerRatingsBeforeDate(
+      client,
+      eventDateString
+    );
     let oldPlayerRatings = {};
     let updatedPlayerRatings = {};
     playerRatings.forEach(player => {
@@ -286,8 +321,7 @@ app.post('/api/admin/add_event', async (req, res) => {
           row.id,
           oldPlayerRatings,
           updatedPlayerRatings,
-          eventMatches,
-          eventDateString
+          eventMatches
         );
       }
     }
@@ -370,99 +404,138 @@ app.put('/api/admin/update_event', async (req, res) => {
     await client.query('BEGIN');
 
     const oldEventInfo = (
-      await client.query(SELECT_EVENT_INFO_QUERY, [eventId])
+      await client.query(SELECT_EVENT_INFO_WITHOUT_PLAYER_NAMES_QUERY, [
+        eventId,
+      ])
     ).rows[0];
-    // TODO if only eventNum changes, nothing to do
+
     const oldEventDateString = oldEventInfo.date;
     const oldEventDate = new Date(oldEventInfo.date);
     const minDateString =
       eventDate <= oldEventDate ? eventDateString : oldEventDateString;
+
+    // Get a list of players w/ adjusted ratings from the target event
+    const adjustedPlayers = (
+      await client.query(SELECT_ADJUSTED_RATINGS_FROM_EVENT_ID_QUERY, [eventId])
+    ).rows;
+    if (eventDateString !== oldEventDateString && adjustedPlayers.length > 0) {
+      throw new Error(APP_DOES_NOT_SUPPORT_MESSAGE);
+    }
     await client.query(UPDATE_EVENTS_QUERY, [
       eventId,
       eventNum,
       eventDateString,
     ]);
 
-    // Get a list of players w/ adjusted ratings from the target event
-    const adjustedPlayers = (await client.query(SELECT_ADJUSTED_RATINGS_FROM_EVENT_ID_QUERY, [eventId])).rows;
+    if (
+      eventDateString !== oldEventDateString ||
+      areMatchListsDifferent(matches, oldEventInfo.matches)
+    ) {
+      // Delete the old player history and matches entries
+      await client.query(DELETE_PLAYER_HISTORIES_WITH_EVENT_ID_QUERY, [
+        eventId,
+      ]);
+      await client.query(DELETE_MATCHES_WITH_EVENT_ID_QUERY, [eventId]);
 
-    // Delete the old player history and matches entries
-    await client.query(DELETE_PLAYER_HISTORIES_WITH_EVENT_ID_QUERY, [eventId]);
-    await client.query(DELETE_MATCHES_WITH_EVENT_ID_QUERY, [eventId]);
+      // Get running mapping of all player ratings BEFORE the old date time
+      const futureEventIdsAndDates = await getFutureEventIdsAndDates(
+        client,
+        minDateString
+      );
 
-    // Get running mapping of all player ratings BEFORE the old date time
-    const futureEventIdsAndDates = await getFutureEventIdsAndDates(
-      client,
-      minDateString
-    );
+      let oldPlayerRatings = {};
+      let updatedPlayerRatings = {};
+      for (const row of futureEventIdsAndDates) {
+        const playerRatings = await getPlayerRatingsBeforeDate(
+          client,
+          row.date
+        );
+        playerRatings.forEach(player => {
+          oldPlayerRatings[player.id] = player.rating;
+          updatedPlayerRatings[player.id] = player.rating;
+        });
 
-    let oldPlayerRatings = {};
-    let updatedPlayerRatings = {};
-    for (const row of futureEventIdsAndDates) {
-      const playerRatings = await getPlayerRatingsBeforeDate(client, row.date);
-      playerRatings.forEach(player => {
+        // If it's the target event, we need to insert into player_histories and matches
+        if (row.id === eventId) {
+          // Calculate match results and rating changes, and insert matches
+          const formattedMatches = calculateAndFormatMatches(
+            eventId,
+            matches,
+            oldPlayerRatings,
+            updatedPlayerRatings
+          );
+          await client.query(INSERT_INTO_MATCHES_QUERY(formattedMatches));
+
+          // For players in the event, insert into player_histories
+          const eventPlayers = Array.from(
+            new Set(
+              matches
+                .map(match => match.winner_id)
+                .concat(matches.map(match => match.loser_id))
+            )
+          );
+          await client.query(
+            INSERT_INTO_PLAYER_HISTORIES_QUERY(
+              eventPlayers.map(id => [
+                id,
+                eventId,
+                `\'${row.date}\'`,
+                oldPlayerRatings[id],
+                updatedPlayerRatings[id],
+              ])
+            )
+          );
+
+          // Reinsert the adjusted ratings
+          adjustedPlayers.forEach(
+            player => {
+              // If the new matches containd the player, we can directly update the player history entry's adjusted rating
+              if (eventPlayers.contains(player.player_id)) {
+                await client.query(
+                  UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_QUERY,
+                  [player.player_id, eventId, player.adjusted_rating]
+                )
+              // Otherwise we need to find the latest player history entry and update the adjusted rating
+              } else {
+                const eventPlayerInfo = (
+                  await client.query(SELECT_PLAYER_INFO_WITH_LAST_EVENT_QUERY, [id])
+                ).rows[0];
+                await client.query(UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_QUERY, [
+                  player.player_id,
+                  eventPlayerInfo.events[0].id,
+                  player.adjusted_rating,
+                ]);
+              }
+            }
+          );
+        } else {
+          const eventMatches = (
+            await client.query(SELECT_EVENT_MATCHES_QUERY, [row.id])
+          ).rows;
+          if (eventMatches.length > 0) {
+            await updateEventResults(
+              client,
+              row.id,
+              oldPlayerRatings,
+              updatedPlayerRatings,
+              eventMatches
+            );
+          }
+        }
+      }
+
+      // After cascade updating results, retrieve the current ratings and update the final player ratings
+      const mostUpdatedPlayerRatings = await getPlayerRatingsBeforeDate(
+        client,
+        new Date()
+      );
+      mostUpdatedPlayerRatings.forEach(player => {
         oldPlayerRatings[player.id] = player.rating;
         updatedPlayerRatings[player.id] = player.rating;
       });
-
-      // If it's the target event, we need to insert into player_histories and matches
-      if (row.id === eventId) {
-        // Calculate match results and rating changes, and insert matches
-        const formattedMatches = calculateAndFormatMatches(
-          eventId,
-          matches,
-          oldPlayerRatings,
-          updatedPlayerRatings
-        );
-        await client.query(INSERT_INTO_MATCHES_QUERY(formattedMatches));
-
-        // For players in the event, insert into player_histories
-        const eventPlayers = Array.from(
-          new Set(
-            matches
-              .map(match => match.winner_id)
-              .concat(matches.map(match => match.loser_id))
-          )
-        );
-        await client.query(
-          INSERT_INTO_PLAYER_HISTORIES_QUERY(
-            eventPlayers.map(id => [
-              id,
-              eventId,
-              `\'${row.date}\'`,
-              oldPlayerRatings[id],
-              updatedPlayerRatings[id],
-            ])
-          )
-        );
-      } else {
-        const eventMatches = (
-          await client.query(SELECT_EVENT_MATCHES_QUERY, [row.id])
-        ).rows;
-        if (eventMatches.length > 0) {
-          await updateEventResults(
-            client,
-            row.id,
-            oldPlayerRatings,
-            updatedPlayerRatings,
-            eventMatches,
-            eventDateString
-          );
-        }
+      for (const id of Object.keys(updatedPlayerRatings)) {
+        await client.query(UPDATE_PLAYER_QUERY, [id, updatedPlayerRatings[id]]);
       }
-    }
-
-    // After cascade updating results, retrieve the current ratings and update the final player ratings
-    const mostUpdatedPlayerRatings = await getPlayerRatingsBeforeDate(
-      client,
-      new Date()
-    );
-    mostUpdatedPlayerRatings.forEach(player => {
-      oldPlayerRatings[player.id] = player.rating;
-      updatedPlayerRatings[player.id] = player.rating;
-    });
-    for (const id of Object.keys(updatedPlayerRatings)) {
-      await client.query(UPDATE_PLAYER_QUERY, [id, updatedPlayerRatings[id]]);
     }
 
     // Get return query
@@ -477,7 +550,11 @@ app.put('/api/admin/update_event', async (req, res) => {
   } catch (err) {
     console.log(err);
     await client.query('ROLLBACK');
-    res.status(500).send('PUT update event errored');
+    if (err.message === APP_DOES_NOT_SUPPORT_MESSAGE) {
+      res.status(404).send("PUT update event app doesn't support");
+    } else {
+      res.status(500).send('PUT update event errored');
+    }
     return;
   } finally {
     client.release();
@@ -520,7 +597,7 @@ app.post('/api/admin/add_player', async (req, res) => {
       ])
     );
 
-    toRet = (await client.query(SELECT_PLAYERS_QUERY)).rows;
+    toRet = (await client.query(SELECT_ALL_PLAYERS_QUERY)).rows;
     await client.query('COMMIT');
   } catch (err) {
     console.log(err);
@@ -580,7 +657,7 @@ app.put('/api/admin/update_player', async (req, res) => {
       await client.query(UPDATE_PLAYER_INFO_QUERY, [id, name, rating, active]);
     }
 
-    toRet = (await client.query(SELECT_PLAYERS_QUERY)).rows;
+    toRet = (await client.query(SELECT_ALL_PLAYERS_QUERY)).rows;
     await client.query('COMMIT');
   } catch (err) {
     console.log(err);

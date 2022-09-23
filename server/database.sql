@@ -19,8 +19,7 @@ CREATE TABLE player_histories (
   date DATE NOT NULL,
   rating_before INTEGER NOT NULL,
   rating_after INTEGER NOT NULL,
-  adjusted_rating INTEGER,
-  adjustment_date DATE
+  adjusted_rating INTEGER
 );
 
 CREATE TABLE matches (

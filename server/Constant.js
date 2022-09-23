@@ -1,5 +1,7 @@
 const format = require('pg-format');
 
+const APP_DOES_NOT_SUPPORT_MESSAGE = "App doesn't support updating event dates that have been adjusted";
+
 const DEFAULT_DATE = `\'2000-01-01\'`;
 
 const DELETE_PLAYER_HISTORIES_WITH_EVENT_ID_QUERY = `
@@ -11,9 +13,16 @@ const DELETE_MATCHES_WITH_EVENT_ID_QUERY = `
   DELETE FROM matches
   WHERE event_id = $1
 `;
-const SELECT_PLAYERS_QUERY = `
-SELECT id, name, rating, active FROM players
-ORDER BY active DESC, rating DESC, name ASC
+
+const SELECT_ALL_PLAYERS_QUERY = `
+  SELECT id, name, rating, active FROM players
+  ORDER BY active DESC, rating DESC, name ASC
+`;
+
+const SELECT_ACTIVE_PLAYERS_QUERY = `
+  SELECT id, name, rating, active FROM players
+  WHERE active = true
+  ORDER BY active DESC, rating DESC, name ASC
 `;
 
 const SELECT_PLAYER_INFO_QUERY = `
@@ -55,10 +64,33 @@ const SELECT_EVENTS_QUERY = `
   ORDER BY date
 `;
 
-const SELECT_EVENT_INFO_QUERY = `
+// Used for displaying event info
+const SELECT_EVENT_INFO_WITH_PLAYER_NAMES_QUERY = `
   SELECT event_num, date, (
     SELECT JSON_AGG(agg1) FROM (
       SELECT winner_id, p1.name AS winner_name, loser_id, p2.name AS loser_name, winner_score, loser_score, rating_change
+      FROM matches
+      INNER JOIN players p1 ON winner_id = p1.id
+      INNER JOIN players p2 ON loser_id = p2.id
+      WHERE event_id = $1
+    ) AS agg1
+  ) AS matches, (
+    SELECT JSON_AGG(agg2) FROM (
+      SELECT player_id, name, rating_before, rating_after
+      FROM player_histories
+      INNER JOIN players ON player_id = id
+      WHERE event_id = $1
+    ) AS agg2
+  ) AS ratings
+  FROM events
+  WHERE id = $1
+`;
+
+// Used for comparing if there are any changes in matches when updating and event
+const SELECT_EVENT_INFO_WITHOUT_PLAYER_NAMES_QUERY = `
+  SELECT event_num, date, (
+    SELECT JSON_AGG(agg1) FROM (
+      SELECT winner_id, loser_id, winner_score, loser_score
       FROM matches
       INNER JOIN players p1 ON winner_id = p1.id
       INNER JOIN players p2 ON loser_id = p2.id
@@ -88,18 +120,6 @@ const SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY = `
   INNER JOIN player_histories ph1 ON ph1.date = ph2.max_date AND ph1.player_id = ph2.player_id
 `;
 
-const SELECT_PLAYER_RATINGS_BEFORE_DATE_EXCLUDING_EVENT_ID_QUERY = `
-  SELECT ph2.player_id as id, ph1.rating_afterm ph1.adjusted_rating
-  FROM (
-    SELECT player_id, MAX(ph.date) as max_date, MAX(ph.event_id)
-    FROM player_histories ph
-    INNER JOIN events e on e.id = ph.event_id
-    WHERE ph.date < $1 AND ph.event_id != $2
-    GROUP BY player_id
-  ) as ph2
-  INNER JOIN player_histories ph1 ON ph1.date = ph2.max_date AND ph1.player_id = ph2.player_id
-`;
-
 const SELECT_PLAYER_RATINGS_ON_DATE_QUERY = `
   SELECT ph2.player_id as id, ph1.rating_after as rating
   FROM (
@@ -114,7 +134,7 @@ const SELECT_PLAYER_RATINGS_ON_DATE_QUERY = `
 
 // In the case of inserting an event, the target eventId will already be calculated so we need to ignore it
 // pg-node converts dates to timesetamp so we convert the date to a string for ease of use
-const SELECT_FUTURE_EVENT_IDS_AND_DATE_WITH_EVENT_ID_QUERY = `
+const SELECT_FUTURE_EVENT_IDS_AND_DATES_EXCLUDING_EVENT_ID_QUERY = `
   SELECT id, CAST(date AS VARCHAR)
   FROM events
   WHERE date >= $1 AND id != $2 AND event_num != 0
@@ -122,9 +142,8 @@ const SELECT_FUTURE_EVENT_IDS_AND_DATE_WITH_EVENT_ID_QUERY = `
 `;
 
 // In the case of updating an event, the target eventId will NOT be calculated so we need to calculate it
-// TODO change to exclude
 // pg-node converts dates to timesetamp so we convert the date to a string for ease of use
-const SELECT_FUTURE_EVENT_IDS_AND_DATE_WITHOUT_EVENT_ID_QUERY = `
+const SELECT_FUTURE_EVENT_IDS_AND_DATES_QUERY = `
   SELECT id, CAST(date AS VARCHAR)
   FROM events
   WHERE date >= $1 AND event_num != 0
@@ -215,20 +234,6 @@ const UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_QUERY = `
   WHERE player_id = $1 AND event_id = $2
 `;
 
-const UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_ON_MOST_RECENT_DATE_BEFORE_DATE_QUERY = `
-  UPDATE player_histories
-  SET adjusted_rating = $2, adjustment_date = $3
-  WHERE player_id = $1 AND event_id = (
-    SELECT MAX(id)
-    FROM events
-    WHERE date = (
-      SELECT MAX(date)
-      FROM player_histories
-      WHERE player_id = $1 AND date <= $3
-    )
-  )
-`;
-
 // Keeping this since it doesn't involve dates
 const UPDATE_PLAYER_QUERY = `
   UPDATE players p
@@ -237,6 +242,7 @@ const UPDATE_PLAYER_QUERY = `
 `;
 
 module.exports = {
+  APP_DOES_NOT_SUPPORT_MESSAGE,
   DEFAULT_DATE,
   DELETE_PLAYER_HISTORIES_WITH_EVENT_ID_QUERY,
   DELETE_MATCHES_WITH_EVENT_ID_QUERY,
@@ -244,18 +250,19 @@ module.exports = {
   INSERT_INTO_MATCHES_QUERY,
   INSERT_INTO_PLAYER_HISTORIES_QUERY,
   INSERT_INTO_PLAYERS_QUERY,
+  SELECT_ACTIVE_PLAYERS_QUERY,
   SELECT_ADJUSTED_RATINGS_FROM_EVENT_ID_QUERY,
-  SELECT_EVENT_INFO_QUERY,
+  SELECT_ALL_PLAYERS_QUERY,
+  SELECT_EVENT_INFO_WITH_PLAYER_NAMES_QUERY,
+  SELECT_EVENT_INFO_WITHOUT_PLAYER_NAMES_QUERY,
   SELECT_EVENT_MATCHES_QUERY,
   SELECT_EVENTS_QUERY,
-  SELECT_FUTURE_EVENT_IDS_AND_DATE_WITH_EVENT_ID_QUERY,
-  SELECT_FUTURE_EVENT_IDS_AND_DATE_WITHOUT_EVENT_ID_QUERY,
+  SELECT_FUTURE_EVENT_IDS_AND_DATES_EXCLUDING_EVENT_ID_QUERY,
+  SELECT_FUTURE_EVENT_IDS_AND_DATES_QUERY,
   SELECT_PLAYER_INFO_QUERY,
   SELECT_PLAYER_INFO_WITH_LAST_EVENT_QUERY,
   SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY,
-  SELECT_PLAYER_RATINGS_BEFORE_DATE_EXCLUDING_EVENT_ID_QUERY,
   SELECT_PLAYER_RATINGS_ON_DATE_QUERY,
-  SELECT_PLAYERS_QUERY,
   UPDATE_EVENTS_QUERY,
   UPDATE_MATCHES_QUERY,
   UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_QUERY,
