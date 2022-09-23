@@ -6,29 +6,31 @@ const path = require('path');
 const pool = require('./db');
 
 const {
-  getPlayerRatingsBeforeDateTime,
-  getFutureEventIds,
-  formatMatches,
+  calculateAndFormatMatches,
+  getPlayerRatingsBeforeDate,
+  getFutureEventIdsAndDates,
   updateEventResults,
 } = require('./Utils');
 
 const {
-  DEFAULT_DATE_TIME,
-  SELECT_PLAYERS_QUERY,
-  SELECT_PLAYER_INFO_QUERY,
-  SELECT_EVENTS_QUERY,
+  DEFAULT_DATE,
+  SELECT_ADJUSTED_RATINGS_FROM_EVENT_ID_QUERY,
   SELECT_EVENT_INFO_QUERY,
   SELECT_EVENT_MATCHES_QUERY,
-  SELECT_MOST_UPDATED_PLAYER_RATINGS_QUERY,
+  SELECT_EVENTS_QUERY,
+  SELECT_PLAYER_INFO_QUERY,
+  SELECT_PLAYER_INFO_WITH_LAST_EVENT_QUERY,
+  SELECT_PLAYERS_QUERY,
   INSERT_INTO_EVENTS_QUERY,
   INSERT_INTO_MATCHES_QUERY,
   INSERT_INTO_PLAYER_HISTORIES_QUERY,
   INSERT_INTO_PLAYERS_QUERY,
-  UPDATE_PLAYERS_QUERY,
   UPDATE_EVENTS_QUERY,
+  UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_QUERY,
+  UPDATE_PLAYER_INFO_QUERY,
   UPDATE_PLAYER_QUERY,
-  SELECT_PLAYER_RATINGS_BEFORE_DATE_TIME_QUERY,
-  SELECT_FUTURE_EVENT_IDS_AND_DATE_TIME_WITH_EVENT_ID_QUERY,
+  DELETE_PLAYER_HISTORIES_WITH_EVENT_ID_QUERY,
+  DELETE_MATCHES_WITH_EVENT_ID_QUERY,
 } = require('./Constant');
 
 const port = process.env.PORT || 5000;
@@ -41,7 +43,7 @@ app.use(express.json());
 // returns
 //    [
 //      {
-//        "id": player_ID,
+//        "id": player_id,
 //        "name": player_name,
 //        "rating": rating,
 //        "active": active
@@ -51,6 +53,7 @@ app.use(express.json());
 app.get('/api/players', (req, res) => {
   pool.query(SELECT_PLAYERS_QUERY, (err, results) => {
     if (err) {
+      console.log(err);
       res.status(500).send('GET players list errored');
       return;
     }
@@ -61,7 +64,7 @@ app.get('/api/players', (req, res) => {
 
 // returns
 //    {
-//      "id": player_ID,
+//      "id": player_id,
 //      "name": player_name,
 //      "rating": rating,
 //      "active": active,
@@ -70,7 +73,7 @@ app.get('/api/players', (req, res) => {
 //          {
 //            "id": event_id,
 //            "event_num": event_num,
-//            "date_time": event_date_time,
+//            "date": event_date,
 //            "rating_before": rating_before,
 //            "rating_after": rating_after
 //          }, ...
@@ -79,10 +82,13 @@ app.get('/api/players', (req, res) => {
 //    }
 app.get('/api/player/:id', (req, res) => {
   const playerId = req.params.id;
-  pool.query(SELECT_PLAYER_INFO_QUERY(playerId), (err, results) => {
+  pool.query(SELECT_PLAYER_INFO_QUERY, [playerId], (err, results) => {
     if (err) {
+      console.log(err);
       res.status(500).send('GET player information errored');
       return;
+    } else if (results.rows.length != 1) {
+      res.status(404).send('GET player information invalid player id');
     }
     const dataRow = results.rows[0];
     const toRet = {
@@ -99,7 +105,7 @@ app.get('/api/player/:id', (req, res) => {
 // returns
 //    [
 //      {
-//        "date_time": event_date_time,
+//        "date": event_date,
 //        "events":
 //          [
 //            {
@@ -114,11 +120,12 @@ app.get('/api/player/:id', (req, res) => {
 app.get('/api/events', (req, res) => {
   pool.query(SELECT_EVENTS_QUERY, (err, results) => {
     if (err) {
+      console.log(err);
       res.status(500).send('GET events errored');
       return;
     }
     const toRet = results.rows.map(row => ({
-      date_time: row.date_time.toISOString().split('T')[0],
+      date: row.date,
       events: row.ids.map((id, index) => ({
         id: id,
         event_num: row.event_nums[index],
@@ -131,7 +138,7 @@ app.get('/api/events', (req, res) => {
 // returns
 //    {
 //      “event_num”: event_num,
-//      “date_time”: event_date_time,
+//      “date”: event_date,
 //      "matches":
 //        [
 //          {
@@ -158,16 +165,18 @@ app.get('/api/events', (req, res) => {
 //    }
 app.get('/api/event/:event_id', (req, res) => {
   const eventId = req.params.event_id;
-  pool.query(SELECT_EVENT_INFO_QUERY(eventId), (err, results) => {
+  pool.query(SELECT_EVENT_INFO_QUERY, [eventId], (err, results) => {
     if (err) {
       console.log(err);
       res.status(500).send('GET event information errored');
       return;
+    } else if (results.rows.length != 1) {
+      res.status(404).send('GET event information invalid event id');
     }
     const dataRow = results.rows[0];
     const toRet = {
       event_num: dataRow.event_num,
-      date_time: dataRow.date_time.toISOString().split('T')[0],
+      date: dataRow.date,
       matches: dataRow.matches ? dataRow.matches : [],
       ratings: dataRow.ratings ? dataRow.ratings : [],
     };
@@ -179,7 +188,7 @@ app.get('/api/event/:event_id', (req, res) => {
 // input
 //    {
 //      "event_num": event_num,
-//      "date_time": event_date_time,
+//      "date": event_date,
 //      “matches”:
 //        [
 //          {
@@ -194,7 +203,7 @@ app.get('/api/event/:event_id', (req, res) => {
 // return
 //    [
 //      {
-//        "date_time": event_date_time,
+//        "date": event_date,
 //        "events":
 //          [
 //            {
@@ -208,99 +217,97 @@ app.get('/api/event/:event_id', (req, res) => {
 //    ]
 app.post('/api/admin/add_event', async (req, res) => {
   const client = await pool.connect();
-  const eventDateTime = req.body.date_time;
+  const eventDateString = req.body.date;
   const eventNum = req.body.event_num;
   const matches = req.body.matches;
   let toRet;
   try {
-    await client.query('BEGIN');
-
     // Insert into events
     const eventId = (
-      await client.query(INSERT_INTO_EVENTS_QUERY(eventNum, eventDateTime))
+      await client.query(INSERT_INTO_EVENTS_QUERY, [eventNum, eventDateString])
     ).rows[0].id;
 
-    // Get running mapping of all player ratings BEFORE the old date time
-    const selectPlayerRatingsQueryResults = await getPlayerRatingsBeforeDateTime(
-      client,
-      eventDateTime
-    );
+    // Get running mapping of all player ratings before the event date
+    const playerRatings = await getPlayerRatingsBeforeDate(client, eventDateString);
     let oldPlayerRatings = {};
     let updatedPlayerRatings = {};
-    selectPlayerRatingsQueryResults.forEach(player => {
+    playerRatings.forEach(player => {
       oldPlayerRatings[player.id] = player.rating;
       updatedPlayerRatings[player.id] = player.rating;
     });
 
-    // insert match results
-    const formattedMatches = formatMatches(
+    // Calculate match results and rating changes, and insert matches
+    const formattedMatches = calculateAndFormatMatches(
       eventId,
       matches,
       oldPlayerRatings,
       updatedPlayerRatings
     );
-    const insertMatchesQuery = INSERT_INTO_MATCHES_QUERY(formattedMatches);
-    await client.query(insertMatchesQuery);
+    await client.query(INSERT_INTO_MATCHES_QUERY(formattedMatches));
 
     // For players in the event, insert into player_histories
-    const eventPlayerSet = Array.from(
+    const eventPlayers = Array.from(
       new Set(
         matches
           .map(match => match.winner_id)
           .concat(matches.map(match => match.loser_id))
       )
     );
-
     await client.query(
       INSERT_INTO_PLAYER_HISTORIES_QUERY(
-        eventPlayerSet.map(id => [
+        eventPlayers.map(id => [
           id,
           eventId,
-          `\'${eventDateTime}\'`,
+          `\'${eventDateString}\'`,
           oldPlayerRatings[id],
-          updatedPlayerRatings[id],
-       ])
-      )
-    );
-
-    // Cascade update
-    const futureEventIds = await getFutureEventIds(client, eventDateTime, eventId);
-    futureEventIds.forEach(async id => {
-      oldPlayerRatings = updatedPlayerRatings;
-      updatedPlayerRatings = { ...oldPlayerRatings };
-      const eventMatches = (await client.query(SELECT_EVENT_MATCHES_QUERY(id)))
-        .rows;
-      if (eventMatches.length > 0) {
-        updateEventResults(
-          client,
-          id,
-          oldPlayerRatings,
-          updatedPlayerRatings,
-          eventMatches
-        );
-      }
-    });
-
-    // After cascade updating results, retrieve the current ratings and update the final player ratings
-    const mostUpdatedPlayerRatings = (
-      await client.query(SELECT_MOST_UPDATED_PLAYER_RATINGS_QUERY)
-    ).rows;
-    mostUpdatedPlayerRatings.forEach(player => {
-      oldPlayerRatings[player.id] = player.rating;
-      updatedPlayerRatings[player.id] = player.rating;
-    });
-    await client.query(
-      UPDATE_PLAYERS_QUERY(
-        Object.keys(updatedPlayerRatings).map(id => [
-          id,
           updatedPlayerRatings[id],
         ])
       )
     );
 
+    // Cascade update future events
+    const futureEventIdsAndDates = await getFutureEventIdsAndDates(
+      client,
+      eventDateString,
+      eventId
+    );
+    for (const row of futureEventIdsAndDates) {
+      const playerRatings = await getPlayerRatingsBeforeDate(client, row.date);
+      playerRatings.forEach(player => {
+        oldPlayerRatings[player.id] = player.rating;
+        updatedPlayerRatings[player.id] = player.rating;
+      });
+      const eventMatches = (
+        await client.query(SELECT_EVENT_MATCHES_QUERY, [row.id])
+      ).rows;
+      if (eventMatches.length > 0) {
+        await updateEventResults(
+          client,
+          row.id,
+          oldPlayerRatings,
+          updatedPlayerRatings,
+          eventMatches,
+          eventDateString
+        );
+      }
+    }
+
+    // After cascade updating results, retrieve the current ratings and update the final player ratings
+    const mostUpdatedPlayerRatings = await getPlayerRatingsBeforeDate(
+      client,
+      new Date()
+    );
+    mostUpdatedPlayerRatings.forEach(player => {
+      oldPlayerRatings[player.id] = player.rating;
+      updatedPlayerRatings[player.id] = player.rating;
+    });
+    for (const id of Object.keys(updatedPlayerRatings)) {
+      await client.query(UPDATE_PLAYER_QUERY, [id, updatedPlayerRatings[id]]);
+    }
+
     // Get return query
     toRet = (await client.query(SELECT_EVENTS_QUERY)).rows.map(row => ({
-      date_time: row.date_time.toISOString().split('T')[0],
+      date: row.date,
       events: row.ids.map((id, index) => ({
         id: id,
         event_num: row.event_nums[index],
@@ -308,8 +315,8 @@ app.post('/api/admin/add_event', async (req, res) => {
     }));
     await client.query('COMMIT');
   } catch (err) {
-    await client.query('ROLLBACK');
     console.log(err);
+    await client.query('ROLLBACK');
     res.status(500).send('POST add event errored');
     return;
   } finally {
@@ -323,7 +330,7 @@ app.post('/api/admin/add_event', async (req, res) => {
 //    {
 //      "id": event_id,
 //      "event_num": event_num,
-//      "date_time": event_date_time,
+//      "date": event_date,
 //      “matches”:
 //        [
 //          {
@@ -338,7 +345,7 @@ app.post('/api/admin/add_event', async (req, res) => {
 // return
 //    [
 //      {
-//        "date_time": event_date_time,
+//        "date": event_date,
 //        "events":
 //          [
 //            {
@@ -354,87 +361,113 @@ app.put('/api/admin/update_event', async (req, res) => {
   const client = await pool.connect();
   const eventId = req.body.id;
   const eventNum = req.body.event_num;
-  const eventDateTime = req.body.date_time;
+  const eventDateString = req.body.date;
+  const eventDate = new Date(eventDateString);
   const matches = req.body.matches;
   let toRet;
 
   try {
     await client.query('BEGIN');
 
-    const oldEventInfo = (await client.query(SELECT_EVENT_INFO_QUERY(eventId)))
-      .rows[0];
+    const oldEventInfo = (
+      await client.query(SELECT_EVENT_INFO_QUERY, [eventId])
+    ).rows[0];
     // TODO if only eventNum changes, nothing to do
-    const minDate =
-      new Date(eventDateTime) <= new Date(oldEventInfo.date_time)
-        ? eventDateTime
-        : oldEventInfo.date_time.toISOString().split('T')[0];
+    const oldEventDateString = oldEventInfo.date;
+    const oldEventDate = new Date(oldEventInfo.date);
+    const minDateString =
+      eventDate <= oldEventDate ? eventDateString : oldEventDateString;
+    await client.query(UPDATE_EVENTS_QUERY, [
+      eventId,
+      eventNum,
+      eventDateString,
+    ]);
 
-    await client.query(UPDATE_EVENTS_QUERY(eventId, eventNum, eventDateTime));
+    // Get a list of players w/ adjusted ratings from the target event
+    const adjustedPlayers = (await client.query(SELECT_ADJUSTED_RATINGS_FROM_EVENT_ID_QUERY, [eventId])).rows;
 
-    const selectPlayersQueryResults = (
-      await client.query(SELECT_PLAYER_RATINGS_BEFORE_DATE_TIME_QUERY(minDateTime))
-    ).rows;
+    // Delete the old player history and matches entries
+    await client.query(DELETE_PLAYER_HISTORIES_WITH_EVENT_ID_QUERY, [eventId]);
+    await client.query(DELETE_MATCHES_WITH_EVENT_ID_QUERY, [eventId]);
+
+    // Get running mapping of all player ratings BEFORE the old date time
+    const futureEventIdsAndDates = await getFutureEventIdsAndDates(
+      client,
+      minDateString
+    );
+
     let oldPlayerRatings = {};
     let updatedPlayerRatings = {};
-    selectPlayersQueryResults.forEach(player => {
-      oldPlayerRatings[player.id] = player.rating;
-      updatedPlayerRatings[player.id] = player.rating;
-    });
+    for (const row of futureEventIdsAndDates) {
+      const playerRatings = await getPlayerRatingsBeforeDate(client, row.date);
+      playerRatings.forEach(player => {
+        oldPlayerRatings[player.id] = player.rating;
+        updatedPlayerRatings[player.id] = player.rating;
+      });
 
-    const futureEventIdsAndDateTimes = (
-      await client.query(
-        SELECT_FUTURE_EVENT_IDS_AND_DATE_TIME_WITH_EVENT_ID_QUERY(minDateTime, eventId)
-      )
-    ).rows.map(row => ({id: row.id, date_time: row.date_time }));
-    futureEventIdsAndDateTimes.forEach(async row => {
-      oldPlayerRatings = updatedPlayerRatings;
-      updatedPlayerRatings = { ...oldPlayerRatings };
+      // If it's the target event, we need to insert into player_histories and matches
       if (row.id === eventId) {
-        updateEventResults(
-          client,
-          row.id,
-          oldPlayerRatings,
-          updatedPlayerRatings,
+        // Calculate match results and rating changes, and insert matches
+        const formattedMatches = calculateAndFormatMatches(
+          eventId,
           matches,
-          row.date_time,
-          true
+          oldPlayerRatings,
+          updatedPlayerRatings
+        );
+        await client.query(INSERT_INTO_MATCHES_QUERY(formattedMatches));
+
+        // For players in the event, insert into player_histories
+        const eventPlayers = Array.from(
+          new Set(
+            matches
+              .map(match => match.winner_id)
+              .concat(matches.map(match => match.loser_id))
+          )
+        );
+        await client.query(
+          INSERT_INTO_PLAYER_HISTORIES_QUERY(
+            eventPlayers.map(id => [
+              id,
+              eventId,
+              `\'${row.date}\'`,
+              oldPlayerRatings[id],
+              updatedPlayerRatings[id],
+            ])
+          )
         );
       } else {
-        const eventMatches = await client.query(SELECT_EVENT_MATCHES_QUERY(row));
+        const eventMatches = (
+          await client.query(SELECT_EVENT_MATCHES_QUERY, [row.id])
+        ).rows;
         if (eventMatches.length > 0) {
-          updateEventResults(
+          await updateEventResults(
             client,
             row.id,
             oldPlayerRatings,
             updatedPlayerRatings,
             eventMatches,
-            row.date_time,
-            false
+            eventDateString
           );
         }
       }
-    });
+    }
 
     // After cascade updating results, retrieve the current ratings and update the final player ratings
-    const mostUpdatedPlayerRatings = (
-      await client.query(SELECT_MOST_UPDATED_PLAYER_RATINGS_QUERY)
-    ).rows;
+    const mostUpdatedPlayerRatings = await getPlayerRatingsBeforeDate(
+      client,
+      new Date()
+    );
     mostUpdatedPlayerRatings.forEach(player => {
       oldPlayerRatings[player.id] = player.rating;
       updatedPlayerRatings[player.id] = player.rating;
     });
-    await client.query(
-      UPDATE_PLAYERS_QUERY(
-        Object.keys(updatedPlayerRatings).map(id => [
-          id,
-          updatedPlayerRatings[id],
-        ])
-      )
-    );
+    for (const id of Object.keys(updatedPlayerRatings)) {
+      await client.query(UPDATE_PLAYER_QUERY, [id, updatedPlayerRatings[id]]);
+    }
 
     // Get return query
     toRet = (await client.query(SELECT_EVENTS_QUERY)).rows.map(row => ({
-      date_time: row.date_time.toISOString().split('T')[0],
+      date: row.date,
       events: row.ids.map((id, index) => ({
         id: id,
         event_num: row.event_nums[index],
@@ -477,13 +510,13 @@ app.post('/api/admin/add_player', async (req, res) => {
   try {
     await client.query('BEGIN');
     const playerId = (
-      await client.query(INSERT_INTO_PLAYERS_QUERY(playerName, playerRating))
+      await client.query(INSERT_INTO_PLAYERS_QUERY, [playerName, playerRating])
     ).rows[0].id;
 
-    // When we create a player, set a default date time for player_histories table
+    // When creating a player, add a dummy entry to player_histories with default date time
     await client.query(
       INSERT_INTO_PLAYER_HISTORIES_QUERY([
-        [playerId, 0, `\'${DEFAULT_DATE_TIME}\'`, playerRating, playerRating],
+        [playerId, 0, DEFAULT_DATE, playerRating, playerRating],
       ])
     );
 
@@ -492,7 +525,7 @@ app.post('/api/admin/add_player', async (req, res) => {
   } catch (err) {
     console.log(err);
     await client.query('ROLLBACK');
-    res.status(500).send('POSt add player errored');
+    res.status(500).send('POST add player errored');
     return;
   } finally {
     client.release();
@@ -524,21 +557,27 @@ app.put('/api/admin/update_player', async (req, res) => {
   const client = await pool.connect();
   let toRet;
   try {
-    const currDateTime = new Date();
     await client.query('BEGIN');
-    const oldRating = await client.query(SELECT_PLAYER_INFO_QUERY(id));
-    await client.query(UPDATE_PLAYER_QUERY(id, name, rating, active));
+    const oldPlayerInfo = (
+      await client.query(SELECT_PLAYER_INFO_WITH_LAST_EVENT_QUERY, [id])
+    ).rows[0];
 
-    // Create a dummy event for the player rating update
-    if (rating !== oldRating) {
-      const eventId = (
-        await client.query(INSERT_INTO_EVENTS_QUERY(0, currDateTime))
-      ).rows[0].id;
-      await client.query(
-        INSERT_INTO_PLAYER_HISTORIES_QUERY([
-          [id, eventId, `\'${currDateTime}\'`, rating, rating],
-        ])
-      );
+    // If rating is updated, update the latest event to include the adjusted rating
+    if (rating !== oldPlayerInfo.rating) {
+      await client.query(UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_QUERY, [
+        id,
+        oldPlayerInfo.events[0].id,
+        rating,
+      ]);
+    }
+
+    // Only update player info if one of the fields changed
+    if (
+      name !== oldPlayerInfo.name ||
+      rating !== oldPlayerInfo.rating ||
+      active !== oldPlayerInfo.active
+    ) {
+      await client.query(UPDATE_PLAYER_INFO_QUERY, [id, name, rating, active]);
     }
 
     toRet = (await client.query(SELECT_PLAYERS_QUERY)).rows;

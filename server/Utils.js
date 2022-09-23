@@ -1,21 +1,35 @@
 const get_points_exchanged = require('./rating_algo');
 
 const {
-  SELECT_PLAYER_RATINGS_BEFORE_DATE_TIME_QUERY,
-  SELECT_FUTURE_EVENT_IDS_AND_DATE_TIME_WITH_EVENT_ID_QUERY,
-  SELECT_FUTURE_EVENT_IDS_AND_DATE_TIME_WITHOUT_EVENT_ID_QUERY,
-  SELECT_PLAYER_RATINGS_ON_DATE_TIME_QUERY,
+  SELECT_FUTURE_EVENT_IDS_AND_DATE_WITH_EVENT_ID_QUERY,
+  SELECT_FUTURE_EVENT_IDS_AND_DATE_WITHOUT_EVENT_ID_QUERY,
+  SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY,
+  SELECT_PLAYER_RATINGS_BEFORE_DATE_EXCLUDING_EVENT_ID_QUERY,
   UPDATE_MATCHES_QUERY,
-  UPDATE_PLAYER_HISTORIES_WITH_DATE_TIME_QUERY,
-  UPDATE_PLAYER_HISTORIES_WITHOUT_DATE_TIME_QUERY,
+  UPDATE_PLAYER_HISTORIES_WITH_DATE_QUERY,
+  UPDATE_PLAYER_HISTORIES_WITHOUT_DATE_QUERY,
 } = require('./Constant');
 
-const getPlayerRatingsBeforeDateTime = async (client, dateTime) => {
-  return (await client.query(SELECT_PLAYER_RATINGS_BEFORE_DATE_TIME_QUERY(dateTime)))
-    .rows;
+const getPlayerRatingsBeforeDate = async (client, date, eventId = null) => {
+  let rows = [];
+  if (eventId === null) {
+    rows = (await client.query(SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY, [date]))
+      .rows;
+  } else {
+    rows = (
+      await client.query(
+        SELECT_PLAYER_RATINGS_BEFORE_DATE_EXCLUDING_EVENT_ID_QUERY,
+        [date, eventId]
+      )
+    ).rows;
+  }
+  return rows.map(row => ({
+    id: row.id,
+    rating: row.adjusted_rating ? row.adjusted_rating : row.rating_after,
+  }));
 };
 
-const formatMatches = (
+const calculateAndFormatMatches = (
   eventId,
   matches,
   oldPlayerRatings,
@@ -43,19 +57,21 @@ const formatMatches = (
   return formattedMatches;
 };
 
-const getFutureEventIds = async (client, eventDateTime, eventId = null) => {
+const getFutureEventIdsAndDates = async (client, eventDate, eventId = null) => {
   if (eventId === null) {
     return (
       await client.query(
-        SELECT_FUTURE_EVENT_IDS_AND_DATE_TIME_WITHOUT_EVENT_ID_QUERY(eventDateTime)
+        SELECT_FUTURE_EVENT_IDS_AND_DATE_WITHOUT_EVENT_ID_QUERY,
+        [eventDate]
       )
-    ).rows.map(row => row.id);
+    ).rows;
   }
   return (
-    await client.query(
-      SELECT_FUTURE_EVENT_IDS_AND_DATE_TIME_WITH_EVENT_ID_QUERY(eventDateTime, eventId)
-    )
-  ).rows.map(row => row.id);
+    await client.query(SELECT_FUTURE_EVENT_IDS_AND_DATE_WITH_EVENT_ID_QUERY, [
+      eventDate,
+      eventId,
+    ])
+  ).rows;
 };
 
 const updateEventResults = async (
@@ -64,52 +80,34 @@ const updateEventResults = async (
   oldPlayerRatings,
   updatedPlayerRatings,
   matches,
-  dateTime,
-  updatePlayerHistory
+  date
 ) => {
-  const formattedMatches = formatMatches(
+  await calculateAndFormatMatches(
+    eventId,
     matches,
     oldPlayerRatings,
     updatedPlayerRatings
   );
-
-  await client.query(UPDATE_MATCHES_QUERY(formattedMatches));
-
-  const selectPlayersQueryResults = (
-    await client.query(SELECT_PLAYER_RATINGS_ON_DATE_TIME_QUERY(dateTime))
-  ).rows;
-  selectPlayersQueryResults.forEach(player => {
-    oldPlayerRatings[player.id] = player.rating;
-    updatedPlayerRatings[player.id] = player.rating;
-  });
-
-  let updatePlayerHistoriesQuery;
-  if (updatePlayerHistory) {
-    updatePlayerHistoriesQuery = UPDATE_PLAYER_HISTORIES_WITHOUT_DATE_TIME_QUERY(
-      eventPlayers.map(id => [
-        id,
-        eventId,
-        oldPlayerRatings[id],
-        updatedPlayerRatings[id],
-      ])
-    );
-  } else {
-    updatePlayerHistoriesQuery = UPDATE_PLAYER_HISTORIES_WITH_DATE_TIME_QUERY(
-      eventPlayers.map(id => [
-        id,
-        eventId,
-        dateTime,
-        oldPlayerRatings[id],
-        updatedPlayerRatings[id],
-      ])
-    );
+  const eventPlayers = Array.from(
+    new Set(
+      matches
+        .map(match => match.winner_id)
+        .concat(matches.map(match => match.loser_id))
+    )
+  );
+  for (const id of eventPlayers) {
+    await client.query(UPDATE_PLAYER_HISTORIES_WITHOUT_DATE_QUERY, [
+      id,
+      eventId,
+      oldPlayerRatings[id],
+      updatedPlayerRatings[id],
+    ]);
   }
-  await client.query(updatePlayerHistoriesQuery);
 };
 
 module.exports = {
-  getPlayerRatingsBeforeDateTime,
-  formatMatches,
-  getFutureEventIds,
+  getPlayerRatingsBeforeDate,
+  calculateAndFormatMatches,
+  getFutureEventIdsAndDates,
   updateEventResults,
 };
