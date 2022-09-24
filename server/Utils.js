@@ -58,6 +58,7 @@ const areMatchListsDifferent = (matches1, matches2) => {
 };
 
 const getFutureEventIdsAndDates = async (client, eventDate, eventId = null) => {
+  console.log(2, client);
   // For update events, we want to calculate the target event ID in the cascade update
   if (eventId === null) {
     return (

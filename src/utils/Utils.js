@@ -13,28 +13,31 @@ import {
 // Stupid javascript timezone issues
 export const formatDate = input => {
   const date = new Date(input);
-  return `${
-    date.getUTCMonth() + 1
-  }/${date.getUTCDate()}/${date.getUTCFullYear()}`;
+  return `
+    ${date.getUTCMonth() + 1}/${date.getUTCDate()}/${date.getUTCFullYear()}
+  `;
 };
 
 export const formatDateForRequest = input => {
   const date = new Date(input);
-  return `${date.getUTCFullYear()}-${
-    date.getUTCMonth() + 1
-  }-${date.getUTCDate()}`;
+  return `
+    ${date.getUTCFullYear()}-${date.getUTCMonth() + 1}-${date.getUTCDate()}
+  `;
 };
 
 export const formatDateForDatePicker = input => {
-  if (input) {
-    const date = new Date(input);
-    return new Date(
-      date.getUTCFullYear(),
-      date.getUTCMonth(),
-      date.getUTCDate()
-    );
-  }
-  return new Date();
+  // Stupid javascript teimzone issues
+  // I really hate javascript dates
+  // Like I really really despise javascript dates
+  const dateFieldsList = input.split(/[-]/);
+  const date = new Date(dateFieldsList[0], dateFieldsList[1] - 1, dateFieldsList[2]);
+  const utcDate = new Date(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate()
+  );
+  console.log(dateFieldsList, date, utcDate);
+  return Date.parse(utcDate);
 };
 
 export const formatMatchResults = matches => {
