@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Container from 'react-bootstrap/Container';
+import Row from 'react-bootstrap/Row';
+import Col from 'react-bootstrap/Col';
 import Form from 'react-bootstrap/Form';
 import Table from 'react-bootstrap/Table';
 import ReactLoading from 'react-loading';
@@ -10,6 +12,7 @@ import './PlayerList.css';
 
 function PlayerList() {
   const [players, setPlayers] = useState([]);
+  const [playerFilter, setPlayerFilter] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,9 +28,23 @@ function PlayerList() {
     <Container className='PlayerList'>
       {!loading && players !== null ? (
         <React.Fragment>
-          <Container >
-          <h1>Player Rating List</h1>
-          <Form className="d-flex"> <Form.Control type="search" placeholder="Search" className="me-2" aria-label="Search" />  </Form>
+          <Container>
+            <Row>
+              <Col md={3} />
+              <Col md={6}>
+                <h1>Player Rating List</h1>
+              </Col>
+              <Col md={3}>
+                <Form>
+                  <Form.Control
+                    type='search'
+                    placeholder='Search Players'
+                    className='text-truncate'
+                    onChange={val => setPlayerFilter(val.target.value)}
+                  />
+                </Form>
+              </Col>
+            </Row>
           </Container>
           <Table striped bordered hover size='sm'>
             <thead>
@@ -38,7 +55,11 @@ function PlayerList() {
             </thead>
             <tbody>
               {players
-                .filter(player => player.active)
+                .filter(
+                  player =>
+                    player.active &&
+                    (playerFilter === '' || player.name.toLowerCase().includes(playerFilter.toLowerCase()))
+                )
                 .map(player => (
                   <tr key={player.id}>
                     <td>

@@ -364,7 +364,7 @@ function AdminPage() {
                     type='radio'
                     name='activeOptions'
                     defaultValue={playerInfo.active}
-                    onChange={v => setPlayerInfo({ ...playerInfo, active: v })}
+                    onChange={val => setPlayerInfo({ ...playerInfo, active: val })}
                   >
                     {activeInactiveRadios.map((radio, idx) => (
                       <ToggleButton
@@ -479,7 +479,7 @@ function AdminPage() {
           {adminValidated ? (
             <div>
               <div className='admin-header'>
-                <h1>Player List</h1>
+                <h1>Player Rating List</h1>
                 <div className='change-button'>
                   <Button onClick={onOpenAddPlayerForm}>Add New Player</Button>
                 </div>
