@@ -10,6 +10,7 @@ const {
   getFutureEventIdsAndDates,
   updateEventResults,
   areMatchListsDifferent,
+  getLatestPlayerRatings,
 } = require('./Utils');
 
 const {
@@ -326,10 +327,8 @@ app.post('/api/admin/add_event', async (req, res) => {
     }
 
     // After cascade updating results, retrieve the current ratings and update the final player ratings
-    const mostUpdatedPlayerRatings = await getPlayerRatingsBeforeDate(
-      client,
-      new Date()
-    );
+    const mostUpdatedPlayerRatings = await getLatestPlayerRatings(
+      client);
     mostUpdatedPlayerRatings.forEach(player => {
       oldPlayerRatings[player.id] = player.rating;
       updatedPlayerRatings[player.id] = player.rating;

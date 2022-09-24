@@ -36,7 +36,6 @@ export const formatDateForDatePicker = input => {
     date.getUTCMonth(),
     date.getUTCDate()
   );
-  console.log(dateFieldsList, date, utcDate);
   return Date.parse(utcDate);
 };
 

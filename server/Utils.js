@@ -3,6 +3,7 @@ const get_points_exchanged = require('./rating_algo');
 const {
   SELECT_FUTURE_EVENT_IDS_AND_DATES_QUERY,
   SELECT_FUTURE_EVENT_IDS_AND_DATES_EXCLUDING_EVENT_ID_QUERY,
+  SELECT_LATEST_PLAYER_RATINGS_QUERY,
   SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY,
   UPDATE_MATCHES_RATING_QUERY,
   UPDATE_PLAYER_HISTORIES_WITHOUT_DATE_QUERY,
@@ -58,7 +59,6 @@ const areMatchListsDifferent = (matches1, matches2) => {
 };
 
 const getFutureEventIdsAndDates = async (client, eventDate, eventId = null) => {
-  console.log(2, client);
   // For update events, we want to calculate the target event ID in the cascade update
   if (eventId === null) {
     return (
@@ -77,6 +77,14 @@ const getFutureEventIdsAndDates = async (client, eventDate, eventId = null) => {
 const getPlayerRatingsBeforeDate = async (client, date) =>
   (
     await client.query(SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY, [date])
+  ).rows.map(row => ({
+    id: row.id,
+    rating: row.adjusted_rating ? row.adjusted_rating : row.rating_after,
+  }));
+
+const getLatestPlayerRatings = async client =>
+  (
+    await client.query(SELECT_LATEST_PLAYER_RATINGS_QUERY)
   ).rows.map(row => ({
     id: row.id,
     rating: row.adjusted_rating ? row.adjusted_rating : row.rating_after,
@@ -119,6 +127,7 @@ module.exports = {
   areMatchListsDifferent,
   calculateAndFormatMatches,
   getFutureEventIdsAndDates,
+  getLatestPlayerRatings,
   getPlayerRatingsBeforeDate,
   updateEventResults,
 };

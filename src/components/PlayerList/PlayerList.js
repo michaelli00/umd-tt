@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Container from 'react-bootstrap/Container';
+import Form from 'react-bootstrap/Form';
 import Table from 'react-bootstrap/Table';
 import ReactLoading from 'react-loading';
 import { Link } from 'react-router-dom';
@@ -24,7 +25,10 @@ function PlayerList() {
     <Container className='PlayerList'>
       {!loading && players !== null ? (
         <React.Fragment>
-          <h1>Player/Rating List</h1>
+          <Container >
+          <h1>Player Rating List</h1>
+          <Form className="d-flex"> <Form.Control type="search" placeholder="Search" className="me-2" aria-label="Search" />  </Form>
+          </Container>
           <Table striped bordered hover size='sm'>
             <thead>
               <tr>

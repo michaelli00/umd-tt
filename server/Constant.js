@@ -113,6 +113,17 @@ const SELECT_EVENT_INFO_WITHOUT_PLAYER_NAMES_QUERY = `
   WHERE id = $1
 `;
 
+const SELECT_LATEST_PLAYER_RATINGS_QUERY = `
+  SELECT ph2.player_id as id, ph1.rating_after, ph1.adjusted_rating
+  FROM (
+    SELECT player_id, MAX(ph.date) as max_date, MAX(ph.event_id)
+    FROM player_histories ph
+    INNER JOIN events e on e.id = ph.event_id
+    GROUP BY player_id
+  ) as ph2
+  INNER JOIN player_histories ph1 ON ph1.date = ph2.max_date AND ph1.player_id = ph2.player_id
+`
+
 const SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY = `
   SELECT ph2.player_id as id, ph1.rating_after, ph1.adjusted_rating
   FROM (
@@ -123,18 +134,6 @@ const SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY = `
     GROUP BY player_id
   ) as ph2
   INNER JOIN player_histories ph1 ON ph1.date = ph2.max_date AND ph1.player_id = ph2.player_id
-`;
-
-const SELECT_PLAYER_RATINGS_ON_DATE_QUERY = `
-  SELECT ph2.player_id as id, ph1.rating_after as rating
-  FROM (
-    SELECT player_id, MAX(ph.event_id)
-    FROM player_histories ph
-    INNER JOIN events e on e.id = ph.event_id
-    WHERE ph.date = $1
-    GROUP BY player_id
-  ) as ph2
-  INNER JOIN player_histories ph1 ON ph1.player_id = ph2.player_id
 `;
 
 // In the case of inserting an event, the target eventId will already be calculated so we need to ignore it
@@ -262,10 +261,10 @@ module.exports = {
   SELECT_EVENTS_QUERY,
   SELECT_FUTURE_EVENT_IDS_AND_DATES_EXCLUDING_EVENT_ID_QUERY,
   SELECT_FUTURE_EVENT_IDS_AND_DATES_QUERY,
+  SELECT_LATEST_PLAYER_RATINGS_QUERY,
   SELECT_PLAYER_INFO_QUERY,
   SELECT_PLAYER_INFO_WITH_LAST_EVENT_QUERY,
   SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY,
-  SELECT_PLAYER_RATINGS_ON_DATE_QUERY,
   UPDATE_EVENTS_QUERY,
   UPDATE_MATCHES_RATING_QUERY,
   UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_QUERY,
