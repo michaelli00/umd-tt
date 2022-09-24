@@ -3,6 +3,8 @@ const format = require('pg-format');
 const APP_DOES_NOT_SUPPORT_MESSAGE =
   "App doesn't support updating event dates that have been adjusted";
 
+const DUPLICATE_EVENT_NUM_MESSAGE = 'Event Group Number already exists for this date. Please select another group number or date';
+
 const DEFAULT_DATE = `\'2000-01-01\'`;
 
 const DELETE_PLAYER_HISTORIES_WITH_EVENT_ID_QUERY = `
@@ -113,6 +115,12 @@ const SELECT_EVENT_INFO_WITHOUT_PLAYER_NAMES_QUERY = `
   WHERE id = $1
 `;
 
+const SELECT_EVENTS_WITH_DATE_AND_EVENT_NUM_QUERY = `
+  SELECT id
+  FROM events
+  WHERE date = $2 AND event_num = $3
+`;
+
 const SELECT_LATEST_PLAYER_RATINGS_QUERY = `
   SELECT ph2.player_id as id, ph1.rating_after, ph1.adjusted_rating
   FROM (
@@ -122,7 +130,7 @@ const SELECT_LATEST_PLAYER_RATINGS_QUERY = `
     GROUP BY player_id
   ) as ph2
   INNER JOIN player_histories ph1 ON ph1.date = ph2.max_date AND ph1.player_id = ph2.player_id
-`
+`;
 
 const SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY = `
   SELECT ph2.player_id as id, ph1.rating_after, ph1.adjusted_rating
@@ -223,8 +231,7 @@ const UPDATE_PLAYER_HISTORIES_WITH_DATE_QUERY = `
 const UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_QUERY = `
   UPDATE player_histories
   SET adjusted_rating = $3
-  WHERE m.event_id = updated_m.event_id
-2
+  WHERE player_id = $1 AND event_id = $2
 `;
 
 // Keeping this since it doesn't involve dates
@@ -242,9 +249,10 @@ const UPDATE_MATCHES_RATING_QUERY = formattedMatches =>
       WHERE m.event_id = updated_m.event_id AND m.winner_id = updated_m.winner_id AND m.loser_id = updated_m.loser_id AND m.winner_score = updated_m.winner_score AND m.loser_score = updated_m.loser_score
     `,
     formattedMatches
-);
+  );
 module.exports = {
   APP_DOES_NOT_SUPPORT_MESSAGE,
+  DUPLICATE_EVENT_NUM_MESSAGE,
   DEFAULT_DATE,
   DELETE_PLAYER_HISTORIES_WITH_EVENT_ID_QUERY,
   DELETE_MATCHES_WITH_EVENT_ID_QUERY,
@@ -259,6 +267,7 @@ module.exports = {
   SELECT_EVENT_INFO_WITHOUT_PLAYER_NAMES_QUERY,
   SELECT_EVENT_MATCHES_QUERY,
   SELECT_EVENTS_QUERY,
+  SELECT_EVENTS_WITH_DATE_AND_EVENT_NUM_QUERY,
   SELECT_FUTURE_EVENT_IDS_AND_DATES_EXCLUDING_EVENT_ID_QUERY,
   SELECT_FUTURE_EVENT_IDS_AND_DATES_QUERY,
   SELECT_LATEST_PLAYER_RATINGS_QUERY,

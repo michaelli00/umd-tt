@@ -7,6 +7,7 @@ const {
   SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY,
   UPDATE_MATCHES_RATING_QUERY,
   UPDATE_PLAYER_HISTORIES_WITHOUT_DATE_QUERY,
+  SELECT_EVENTS_WITH_DATE_AND_EVENT_NUM_QUERY,
 } = require('./Constant');
 
 const calculateAndFormatMatches = (
@@ -83,9 +84,7 @@ const getPlayerRatingsBeforeDate = async (client, date) =>
   }));
 
 const getLatestPlayerRatings = async client =>
-  (
-    await client.query(SELECT_LATEST_PLAYER_RATINGS_QUERY)
-  ).rows.map(row => ({
+  (await client.query(SELECT_LATEST_PLAYER_RATINGS_QUERY)).rows.map(row => ({
     id: row.id,
     rating: row.adjusted_rating ? row.adjusted_rating : row.rating_after,
   }));
@@ -123,11 +122,19 @@ const updateEventResults = async (
   }
 };
 
+const isDuplicateEventNum = async (client, date, eventNum) =>
+  (
+    await client.query(
+      SELECT_EVENTS_WITH_DATE_AND_EVENT_NUM_QUERY[(date, eventNum)]
+    )
+  ).rows.length > 0;
+
 module.exports = {
   areMatchListsDifferent,
   calculateAndFormatMatches,
   getFutureEventIdsAndDates,
   getLatestPlayerRatings,
   getPlayerRatingsBeforeDate,
+  isDuplicateEventNum,
   updateEventResults,
 };

@@ -82,8 +82,10 @@ function AdminPage() {
       rating: rating,
     };
     const updatedPlayersResponse = await postAddPlayer(reqBody);
-    setPlayerList(updatedPlayersResponse);
-    setShowAddPlayerForm(false);
+    if (updatedPlayersResponse !== null) {
+      setPlayerList(updatedPlayersResponse);
+      setShowAddPlayerForm(false);
+    }
   };
 
   const onOpenUpdatePlayerInfoForm = async id => {
@@ -107,8 +109,10 @@ function AdminPage() {
       active: playerInfo.active,
     };
     const updatedPlayersResponse = await putUpdatePlayer(reqBody);
-    setPlayerList(updatedPlayersResponse);
-    setShowUpdatePlayerInfoForm(false);
+    if (updatedPlayersResponse !== null) {
+      setPlayerList(updatedPlayersResponse);
+      setShowUpdatePlayerInfoForm(false);
+    }
   };
 
   const onChangeSelectedGroupPlayers = selected => {
@@ -211,18 +215,19 @@ function AdminPage() {
       matches: matches,
     };
 
+    let updatedEventsResponse = null;
     if (showAddResultsForm) {
-      const updatedEventsResponse = await postAddEvent(reqBody);
-      setLeagueList(updatedEventsResponse);
-      setShowAddResultsForm(false);
+      updatedEventsResponse = await postAddEvent(reqBody);
     } else if (showUpdateResultsForm) {
       reqBody.id = eventInfo.id;
-      const updatedEventsResponse = await putUpdateEvent(reqBody);
-      setLeagueList(updatedEventsResponse);
-      setShowUpdateResultsForm(false);
+      updatedEventsResponse = await putUpdateEvent(reqBody);
     }
-    setPlayerList(await fetchAllPlayers());
-    setEventInfo({});
+    if (updatedEventsResponse !== null) {
+      setLeagueList(updatedEventsResponse);
+      setShowAddResultsForm(false);
+      setPlayerList(await fetchAllPlayers());
+      setEventInfo({});
+    }
   };
 
   const renderMatchResultsForm = players => {
@@ -364,7 +369,9 @@ function AdminPage() {
                     type='radio'
                     name='activeOptions'
                     defaultValue={playerInfo.active}
-                    onChange={val => setPlayerInfo({ ...playerInfo, active: val })}
+                    onChange={val =>
+                      setPlayerInfo({ ...playerInfo, active: val })
+                    }
                   >
                     {activeInactiveRadios.map((radio, idx) => (
                       <ToggleButton
@@ -423,9 +430,16 @@ function AdminPage() {
                     <h5>Event Date</h5>
                   </Form.Label>
                   <DatePicker
-                    selected={eventInfo.date ? formatDateForDatePicker(eventInfo.date) : ''}
+                    selected={
+                      eventInfo.date
+                        ? formatDateForDatePicker(eventInfo.date)
+                        : ''
+                    }
                     onChange={date =>
-                      setEventInfo({ ...eventInfo, date: formatDateForRequest(date) })
+                      setEventInfo({
+                        ...eventInfo,
+                        date: formatDateForRequest(date),
+                      })
                     }
                     minDate={new Date('2000-01-01')}
                     maxDate={new Date()}

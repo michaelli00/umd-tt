@@ -26,11 +26,15 @@ export const formatDateForRequest = input => {
 };
 
 export const formatDateForDatePicker = input => {
-  // Stupid javascript teimzone issues
+  // Stupid javascript timezone issues
   // I really hate javascript dates
   // Like I really really despise javascript dates
   const dateFieldsList = input.split(/[-]/);
-  const date = new Date(dateFieldsList[0], dateFieldsList[1] - 1, dateFieldsList[2]);
+  const date = new Date(
+    dateFieldsList[0],
+    dateFieldsList[1] - 1,
+    dateFieldsList[2]
+  );
   const utcDate = new Date(
     date.getUTCFullYear(),
     date.getUTCMonth(),
@@ -149,6 +153,11 @@ export const postAddEvent = async body => {
   }).then(res => {
     if (res.status === 200) {
       return res.json();
+    } else if (res.status === 403) {
+      alert(
+        'Event Group Number already exists for this date. Please select another group number or date.'
+      );
+      return null;
     } else {
       // TODO REMOVE
       console.log(res);
@@ -206,6 +215,11 @@ export const putUpdateEvent = async body => {
   }).then(res => {
     if (res.status === 200) {
       return res.json();
+    } else if (res.status === 403) {
+      alert(
+        'Event Group Number already exists for this date. Please select another group number or date.'
+      );
+      return null;
     } else if (res.status === 404) {
       alert(
         "App doesn't support updating event dates that have player rating adjustments."

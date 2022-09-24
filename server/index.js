@@ -11,10 +11,12 @@ const {
   updateEventResults,
   areMatchListsDifferent,
   getLatestPlayerRatings,
+  isDuplicateEventNum,
 } = require('./Utils');
 
 const {
   APP_DOES_NOT_SUPPORT_MESSAGE,
+  DUPLICATE_EVENT_NUM_MESSAGE,
   DEFAULT_DATE,
   SELECT_ADJUSTED_RATINGS_FROM_EVENT_ID_QUERY,
   SELECT_EVENT_INFO_WITH_PLAYER_NAMES_QUERY,
@@ -254,6 +256,12 @@ app.post('/api/admin/add_event', async (req, res) => {
   const matches = req.body.matches;
   let toRet;
   try {
+    await client.query('BEGIN');
+
+    if (await isDuplicateEventNum(client, eventDateString, eventNum)) {
+      throw new Error(DUPLICATE_EVENT_NUM_MESSAGE);
+    }
+
     // Insert into events
     const eventId = (
       await client.query(INSERT_INTO_EVENTS_QUERY, [eventNum, eventDateString])
@@ -327,8 +335,7 @@ app.post('/api/admin/add_event', async (req, res) => {
     }
 
     // After cascade updating results, retrieve the current ratings and update the final player ratings
-    const mostUpdatedPlayerRatings = await getLatestPlayerRatings(
-      client);
+    const mostUpdatedPlayerRatings = await getLatestPlayerRatings(client);
     mostUpdatedPlayerRatings.forEach(player => {
       oldPlayerRatings[player.id] = player.rating;
       updatedPlayerRatings[player.id] = player.rating;
@@ -349,7 +356,11 @@ app.post('/api/admin/add_event', async (req, res) => {
   } catch (err) {
     console.log(err);
     await client.query('ROLLBACK');
-    res.status(500).send('POST add event errored');
+    if (err.message === DUPLICATE_EVENT_NUM_MESSAGE) {
+      res.status(403).send('POST event duplicate event number found');
+    } else {
+      res.status(500).send('POST event errored');
+    }
     return;
   } finally {
     client.release();
@@ -400,6 +411,10 @@ app.put('/api/admin/update_event', async (req, res) => {
 
   try {
     await client.query('BEGIN');
+
+    if (await isDuplicateEventNum(client, eventDateString, eventNum)) {
+      throw new Error(DUPLICATE_EVENT_NUM_MESSAGE);
+    }
 
     const oldEventInfo = (
       await client.query(SELECT_EVENT_INFO_WITHOUT_PLAYER_NAMES_QUERY, [
@@ -485,27 +500,30 @@ app.put('/api/admin/update_event', async (req, res) => {
           );
 
           // Reinsert the adjusted ratings
-          adjustedPlayers.forEach(
-            async player => {
-              // If the new matches containd the player, we can directly update the player history entry's adjusted rating
-              if (eventPlayers.contains(player.player_id)) {
-                await client.query(
-                  UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_QUERY,
-                  [player.player_id, eventId, player.adjusted_rating]
-                )
+          adjustedPlayers.forEach(async player => {
+            // If the new matches containd the player, we can directly update the player history entry's adjusted rating
+            if (eventPlayers.contains(player.player_id)) {
+              await client.query(
+                UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_QUERY,
+                [player.player_id, eventId, player.adjusted_rating]
+              );
               // Otherwise we need to find the latest player history entry and update the adjusted rating
-              } else {
-                const eventPlayerInfo = (
-                  await client.query(SELECT_PLAYER_INFO_WITH_LAST_EVENT_QUERY, [id])
-                ).rows[0];
-                await client.query(UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_QUERY, [
+            } else {
+              const eventPlayerInfo = (
+                await client.query(SELECT_PLAYER_INFO_WITH_LAST_EVENT_QUERY, [
+                  id,
+                ])
+              ).rows[0];
+              await client.query(
+                UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_QUERY,
+                [
                   player.player_id,
                   eventPlayerInfo.events[0].id,
                   player.adjusted_rating,
-                ]);
-              }
+                ]
+              );
             }
-          );
+          });
         } else {
           const eventMatches = (
             await client.query(SELECT_EVENT_MATCHES_QUERY, [row.id])
@@ -550,6 +568,8 @@ app.put('/api/admin/update_event', async (req, res) => {
     await client.query('ROLLBACK');
     if (err.message === APP_DOES_NOT_SUPPORT_MESSAGE) {
       res.status(404).send("PUT update event app doesn't support");
+    } else if (err.message === DUPLICATE_EVENT_NUM_MESSAGE) {
+      res.status(403).send('PUT event duplicate event number found');
     } else {
       res.status(500).send('PUT update event errored');
     }
