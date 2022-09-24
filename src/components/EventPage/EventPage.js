@@ -4,7 +4,7 @@ import Table from 'react-bootstrap/Table';
 import ReactLoading from 'react-loading';
 import { Link } from 'react-router-dom';
 import { LOADING_COLOR } from '../../utils/Constants';
-import { fetchEventInfo, formatDate } from '../../utils/Utils';
+import { formatDate, fetchEventInfo } from '../../utils/Utils';
 import './EventPage.css';
 
 function EventPage() {
@@ -20,13 +20,12 @@ function EventPage() {
 
     loadEventInfo();
   }, []);
-  console.log(eventInfo);
 
   return (
     <Container className='EventPage'>
-      {!loading ? (
+      {!loading && eventInfo !== null ? (
         <React.Fragment>
-          <h1>{`${formatDate(eventInfo.date)} ${eventInfo.name}`}</h1>
+          <h1>{`${formatDate(eventInfo.date)} Group${eventInfo.event_num}`}</h1>
           <br />
           <h1>Matches</h1>
           <Table striped bordered hover size='sm'>

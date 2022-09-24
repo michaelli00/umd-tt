@@ -1,4 +1,3 @@
-/* TODO add check for when event_num = 0 */
 const express = require('express');
 const app = express();
 const cors = require('cors');
@@ -488,7 +487,7 @@ app.put('/api/admin/update_event', async (req, res) => {
 
           // Reinsert the adjusted ratings
           adjustedPlayers.forEach(
-            player => {
+            async player => {
               // If the new matches containd the player, we can directly update the player history entry's adjusted rating
               if (eventPlayers.contains(player.player_id)) {
                 await client.query(

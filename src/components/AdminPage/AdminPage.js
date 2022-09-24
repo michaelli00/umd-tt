@@ -12,21 +12,24 @@ import ReactLoading from 'react-loading';
 import { Link } from 'react-router-dom';
 import { LOADING_COLOR } from '../../utils/Constants';
 import {
-  formatDate,
-  formatMatchResults,
-  fetchEvents,
+  fetchAllPlayers,
   fetchEventInfo,
+  fetchEvents,
   fetchPlayerInfo,
-  fetchPlayers,
-  postAddPlayer,
+  formatDate,
+  formatDateForDatePicker,
+  formatDateForRequest,
+  formatMatchResults,
   postAddEvent,
-  putAddPlayer,
+  postAddPlayer,
+  putUpdatePlayer,
   putUpdateEvent,
 } from '../../utils/Utils';
 import 'react-datepicker/dist/react-datepicker.css';
 import './AdminPage.css';
 
 function AdminPage() {
+  // TODO set validated to false
   const [adminValidated, setAdminValidated] = useState(true); // admin page validation
   const [loading, setLoading] = useState(true); // is the page loading
 
@@ -44,7 +47,7 @@ function AdminPage() {
 
   useEffect(() => {
     let loadAdminPageData = async () => {
-      setPlayerList(await fetchPlayers());
+      setPlayerList(await fetchAllPlayers());
       setLeagueList(await fetchEvents());
       setLoading(false);
     };
@@ -103,7 +106,7 @@ function AdminPage() {
       rating: rating,
       active: playerInfo.active,
     };
-    const updatedPlayersResponse = await putAddPlayer(reqBody);
+    const updatedPlayersResponse = await putUpdatePlayer(reqBody);
     setPlayerList(updatedPlayersResponse);
     setShowUpdatePlayerInfoForm(false);
   };
@@ -124,7 +127,6 @@ function AdminPage() {
 
   const onOpenOldEventResultsForm = async id => {
     const eventInfo = await fetchEventInfo(id);
-    const eventDate = new Date(eventInfo.date);
     const playersObj = {};
     eventInfo.matches.forEach(match => {
       playersObj[match.winner_id] = match.winner_name;
@@ -137,7 +139,6 @@ function AdminPage() {
     setEventInfo({
       ...eventInfo,
       id: id,
-      eventDate: eventDate,
       selectedPlayers: selectedPlayers,
     });
     setShowUpdateResultsForm(true);
@@ -145,8 +146,8 @@ function AdminPage() {
 
   const onSubmitResultsForm = async event => {
     event.preventDefault();
-    const name = event.target.elements.formBasicName.value;
-    const date = eventInfo.eventDate.toISOString().split('T')[0];
+    const groupNumber = event.target.elements.formBasicGroupNumber.value;
+    const date = eventInfo.date;
     if (!date) {
       alert('Please enter event date.');
       return;
@@ -187,6 +188,9 @@ function AdminPage() {
               loser_id: playerMatchPairs[i][0].id,
               loser_score: p1Score,
             };
+          } else {
+            alert('Invalid score. There must be a winner!');
+            return;
           }
           matches.push(match);
         }
@@ -202,8 +206,8 @@ function AdminPage() {
     }
 
     const reqBody = {
-      date: date,
-      name: name,
+      date: formatDateForRequest(date),
+      event_num: groupNumber,
       matches: matches,
     };
 
@@ -217,7 +221,7 @@ function AdminPage() {
       setLeagueList(updatedEventsResponse);
       setShowUpdateResultsForm(false);
     }
-    setPlayerList(await fetchPlayers());
+    setPlayerList(await fetchAllPlayers());
     setEventInfo({});
   };
 
@@ -261,9 +265,9 @@ function AdminPage() {
     flatLeagueList.push.apply(
       flatLeagueList,
       league.events.map((event, index) => ({
-        date: league.date,
+        date: formatDate(new Date(league.date)),
         id: event.id,
-        name: event.name,
+        event_num: event.event_num,
         diffDate: index === 0 ? true : false,
       }))
     )
@@ -274,9 +278,13 @@ function AdminPage() {
     { name: 'Inactive', value: false },
   ];
 
+  const addOrUpdateNewEventString = showUpdateResultsForm
+    ? 'Update Event Results'
+    : 'Add New Event Results';
+
   return (
     <Container className='AdminPage'>
-      {!loading ? (
+      {!loading && playerList !== null && leagueList !== null ? (
         <React.Fragment>
           <Modal
             size='lg'
@@ -395,14 +403,17 @@ function AdminPage() {
             </Modal.Header>
             <Form onSubmit={onSubmitResultsForm}>
               <Modal.Body>
-                <Form.Group controlId='formBasicName' className='admin-form'>
+                <Form.Group
+                  controlId='formBasicGroupNumber'
+                  className='admin-form'
+                >
                   <Form.Label>
-                    <h5>Event Name</h5>
+                    <h5>Event Group Number</h5>
                   </Form.Label>
                   <Form.Control
-                    type='input'
-                    placeholder='Name'
-                    defaultValue={eventInfo.name}
+                    type='number'
+                    placeholder='Group Number'
+                    defaultValue={eventInfo.event_num}
                     required
                   />
                 </Form.Group>
@@ -412,10 +423,12 @@ function AdminPage() {
                     <h5>Event Date</h5>
                   </Form.Label>
                   <DatePicker
-                    selected={eventInfo.eventDate}
+                    selected={eventInfo.date ? formatDateForDatePicker(eventInfo.date) : ''}
                     onChange={date =>
-                      setEventInfo({ ...eventInfo, eventDate: date })
+                      setEventInfo({ ...eventInfo, date: formatDateForRequest(date) })
                     }
+                    minDate={new Date('2000-01-01')}
+                    maxDate={new Date()}
                   />
                 </Form.Group>
                 <br />
@@ -427,9 +440,11 @@ function AdminPage() {
                     <h5>Select Players</h5>
                   </Form.Label>
                   <Multiselect
-                    options={playerList.filter(player => player.active).map(player => {
-                      return { name: player.name, id: player.id };
-                    })}
+                    options={playerList
+                      .filter(player => player.active)
+                      .map(player => {
+                        return { name: player.name, id: player.id };
+                      })}
                     selectedValues={eventInfo.selectedPlayers}
                     onSelect={onChangeSelectedGroupPlayers}
                     onRemove={onChangeSelectedGroupPlayers}
@@ -456,7 +471,7 @@ function AdminPage() {
                   Close
                 </Button>
                 <Button variant='primary' type='submit'>
-                  Add New Event Results
+                  {addOrUpdateNewEventString}
                 </Button>
               </Modal.Footer>
             </Form>
@@ -510,7 +525,7 @@ function AdminPage() {
                 <thead>
                   <tr>
                     <th>Date</th>
-                    <th>Event Name</th>
+                    <th>Event Group Number</th>
                     <th>Change Event Results</th>
                   </tr>
                 </thead>
@@ -523,7 +538,9 @@ function AdminPage() {
                         <td></td>
                       )}
                       <td>
-                        <Link to={`/event/${event.id}`}>{event.name}</Link>
+                        <Link to={`/event/${event.id}`}>
+                          Group{event.event_num}
+                        </Link>
                       </td>
                       <td>
                         <Button

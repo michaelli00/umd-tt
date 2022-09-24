@@ -23,7 +23,7 @@ function PlayerProfile() {
 
   return (
     <Container className='PlayerProfile'>
-      {!loading ? (
+      {!loading && playerInfo !== null ? (
         <React.Fragment>
           <h1> {playerInfo.name} </h1>
           <div className='player-info'>
@@ -48,12 +48,12 @@ function PlayerProfile() {
               </tr>
             </thead>
             <tbody>
-              {playerInfo.events.map((eventInfo) => (
-                <tr key={eventInfo.eid}>
-                  <td>{formatDate(eventInfo.edate)}</td>
+              {playerInfo.events.map(eventInfo => (
+                <tr key={eventInfo.id}>
+                  <td>{formatDate(eventInfo.date)}</td>
                   <td>
-                    <Link to={`/event/${eventInfo.eid}`}>
-                      {eventInfo.ename}
+                    <Link to={`/event/${eventInfo.id}`}>
+                      Group{eventInfo.event_num}
                     </Link>
                   </td>
                   <td>{eventInfo.rating_before}</td>

@@ -25,6 +25,7 @@ h1 {
 }
 
 .table {
+  margin-top: 5px;
   border-color: black !important;
 }
 

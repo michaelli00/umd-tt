@@ -4,7 +4,7 @@ import Table from 'react-bootstrap/Table';
 import ReactLoading from 'react-loading';
 import { Link } from 'react-router-dom';
 import { LOADING_COLOR } from '../../utils/Constants';
-import { fetchPlayers } from '../../utils/Utils';
+import { fetchActivePlayers } from '../../utils/Utils';
 import './PlayerList.css';
 
 function PlayerList() {
@@ -13,7 +13,7 @@ function PlayerList() {
 
   useEffect(() => {
     let loadPlayerData = async () => {
-      setPlayers(await fetchPlayers());
+      setPlayers(await fetchActivePlayers());
       setLoading(false);
     };
 
@@ -22,7 +22,7 @@ function PlayerList() {
 
   return (
     <Container className='PlayerList'>
-      {!loading ? (
+      {!loading && players !== null ? (
         <React.Fragment>
           <h1>Player/Rating List</h1>
           <Table striped bordered hover size='sm'>

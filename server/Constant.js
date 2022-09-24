@@ -1,6 +1,7 @@
 const format = require('pg-format');
 
-const APP_DOES_NOT_SUPPORT_MESSAGE = "App doesn't support updating event dates that have been adjusted";
+const APP_DOES_NOT_SUPPORT_MESSAGE =
+  "App doesn't support updating event dates that have been adjusted";
 
 const DEFAULT_DATE = `\'2000-01-01\'`;
 
@@ -32,6 +33,7 @@ const SELECT_PLAYER_INFO_QUERY = `
       FROM player_histories
       INNER JOIN events ON player_histories.event_id = events.id
       WHERE player_histories.player_id = $1 AND event_num != 0
+      ORDER BY events.date ASC, event_num ASC
     ) AS agg
   ) AS events
   FROM players
@@ -56,8 +58,9 @@ const SELECT_PLAYER_INFO_WITH_LAST_EVENT_QUERY = `
   WHERE id = $1
 `;
 
+// pg-node converts dates to timesetamp so we convert the date to a string for ease of use
 const SELECT_EVENTS_QUERY = `
-  SELECT date, ARRAY_AGG(id) AS ids, ARRAY_AGG(event_num) AS event_nums
+  SELECT CAST(date AS VARCHAR), ARRAY_AGG(id) AS ids, ARRAY_AGG(event_num) AS event_nums
   FROM events
   WHERE event_num != 0
   GROUP BY date
@@ -65,8 +68,9 @@ const SELECT_EVENTS_QUERY = `
 `;
 
 // Used for displaying event info
+// pg-node converts dates to timesetamp so we convert the date to a string for ease of use
 const SELECT_EVENT_INFO_WITH_PLAYER_NAMES_QUERY = `
-  SELECT event_num, date, (
+  SELECT event_num, CAST(date AS VARCHAR), (
     SELECT JSON_AGG(agg1) FROM (
       SELECT winner_id, p1.name AS winner_name, loser_id, p2.name AS loser_name, winner_score, loser_score, rating_change
       FROM matches
@@ -87,8 +91,9 @@ const SELECT_EVENT_INFO_WITH_PLAYER_NAMES_QUERY = `
 `;
 
 // Used for comparing if there are any changes in matches when updating and event
+// pg-node converts dates to timesetamp so we convert the date to a string for ease of use
 const SELECT_EVENT_INFO_WITHOUT_PLAYER_NAMES_QUERY = `
-  SELECT event_num, date, (
+  SELECT event_num, CAST(date AS VARCHAR), (
     SELECT JSON_AGG(agg1) FROM (
       SELECT winner_id, loser_id, winner_score, loser_score
       FROM matches
@@ -192,18 +197,6 @@ const INSERT_INTO_PLAYERS_QUERY = `
   RETURNING id
 `;
 
-// Keeping this since it doesn't involve dates
-const UPDATE_MATCHES_QUERY = formattedMatches =>
-  format(
-    `
-      UPDATE matches m
-      SET winner_id = updated_m.winner_id, loser_id = updated_m.loser_id, winner_score = updated_m.winner_score, loser_score = updated_m.loser_score, rating_change = updated_m.rating_change
-      FROM (VALUES %s) AS updated_m (event_id, winner_id, loser_id, winner_score, loser_score, rating_change)
-      WHERE m.event_id = updated_m.event_id
-    `,
-    formattedMatches
-  );
-
 const UPDATE_EVENTS_QUERY = `
   UPDATE events
   SET event_num = $2, date = $3
@@ -231,7 +224,8 @@ const UPDATE_PLAYER_HISTORIES_WITH_DATE_QUERY = `
 const UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_QUERY = `
   UPDATE player_histories
   SET adjusted_rating = $3
-  WHERE player_id = $1 AND event_id = $2
+  WHERE m.event_id = updated_m.event_id
+2
 `;
 
 // Keeping this since it doesn't involve dates
@@ -241,6 +235,15 @@ const UPDATE_PLAYER_QUERY = `
   WHERE p.id = $1
 `;
 
+const UPDATE_MATCHES_RATING_QUERY = formattedMatches =>
+  format(
+    `
+      UPDATE matches m SET rating_change = updated_m.rating_change
+      FROM (VALUES %s) AS updated_m (event_id, winner_id, loser_id, winner_score, loser_score, rating_change)
+      WHERE m.event_id = updated_m.event_id AND m.winner_id = updated_m.winner_id AND m.loser_id = updated_m.loser_id AND m.winner_score = updated_m.winner_score AND m.loser_score = updated_m.loser_score
+    `,
+    formattedMatches
+);
 module.exports = {
   APP_DOES_NOT_SUPPORT_MESSAGE,
   DEFAULT_DATE,
@@ -264,7 +267,7 @@ module.exports = {
   SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY,
   SELECT_PLAYER_RATINGS_ON_DATE_QUERY,
   UPDATE_EVENTS_QUERY,
-  UPDATE_MATCHES_QUERY,
+  UPDATE_MATCHES_RATING_QUERY,
   UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_QUERY,
   UPDATE_PLAYER_HISTORIES_WITH_DATE_QUERY,
   UPDATE_PLAYER_HISTORIES_WITHOUT_DATE_QUERY,

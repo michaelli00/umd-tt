@@ -4,6 +4,7 @@ const {
   SELECT_FUTURE_EVENT_IDS_AND_DATES_QUERY,
   SELECT_FUTURE_EVENT_IDS_AND_DATES_EXCLUDING_EVENT_ID_QUERY,
   SELECT_PLAYER_RATINGS_BEFORE_DATE_QUERY,
+  UPDATE_MATCHES_RATING_QUERY,
   UPDATE_PLAYER_HISTORIES_WITHOUT_DATE_QUERY,
 } = require('./Constant');
 
@@ -87,12 +88,15 @@ const updateEventResults = async (
   updatedPlayerRatings,
   matches
 ) => {
-  calculateAndFormatMatches(
+  // Update rating results for the match
+  const formattedMatches = calculateAndFormatMatches(
     eventId,
     matches,
     oldPlayerRatings,
     updatedPlayerRatings
   );
+  await client.query(UPDATE_MATCHES_RATING_QUERY(formattedMatches));
+
   const eventPlayers = Array.from(
     new Set(
       matches

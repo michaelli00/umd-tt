@@ -4,7 +4,7 @@ import Table from 'react-bootstrap/Table';
 import ReactLoading from 'react-loading';
 import { Link } from 'react-router-dom';
 import { LOADING_COLOR } from '../../utils/Constants';
-import { fetchEvents, formatDate } from '../../utils/Utils';
+import { formatDate, fetchEvents } from '../../utils/Utils';
 import './LeagueList.css';
 
 function LeagueList() {
@@ -22,7 +22,7 @@ function LeagueList() {
 
   return (
     <Container className='LeagueList'>
-      {!loading ? (
+      {!loading && leagueList !== null ? (
         <React.Fragment>
           <h1>List of Previous Leagues</h1>
           <Table striped bordered hover size='sm'>
@@ -37,9 +37,11 @@ function LeagueList() {
                 <tr key={league.events[0].id}>
                   <td>{formatDate(league.date)}</td>
                   <td>
-                    {league.events.map((event) => (
+                    {league.events.map(event => (
                       <Link to={`/event/${event.id}`} key={event.id}>
-                        <span className='event-name'>{event.name}</span>
+                        <span className='event-name'>
+                          Group{event.event_num}
+                        </span>
                       </Link>
                     ))}
                   </td>
