@@ -29,8 +29,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import './AdminPage.css';
 
 function AdminPage() {
-  // TODO set validated to false
-  const [adminValidated, setAdminValidated] = useState(true); // admin page validation
+  const [adminValidated, setAdminValidated] = useState(false); // admin page validation
   const [loading, setLoading] = useState(true); // is the page loading
 
   const [showAddPlayerForm, setShowAddPlayerForm] = useState(false);

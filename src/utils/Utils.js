@@ -69,8 +69,6 @@ export const fetchActivePlayers = async () => {
     if (res.status === 200) {
       return res.json();
     } else {
-      // TODO REMOVE
-      console.log(res);
       alert(
         'Something went wrong with the app when retrieving active players. Please refresh the page and try again.'
       );
@@ -84,8 +82,6 @@ export const fetchAllPlayers = async () => {
     if (res.status === 200) {
       return res.json();
     } else {
-      // TODO REMOVE
-      console.log(res);
       alert(
         'Something went wrong with the app when retrieving all players. Please refresh the page and try again.'
       );
@@ -102,8 +98,6 @@ export const fetchEventInfo = async id => {
       alert('Invalid event id. Nothing to show.');
       return null;
     } else {
-      // TODO REMOVE
-      console.log(res);
       alert(
         'Something went wrong with the app when retrieving event info. Please refresh the page and try again.'
       );
@@ -117,8 +111,6 @@ export const fetchEvents = async () => {
     if (res.status === 200) {
       return res.json();
     } else {
-      // TODO REMOVE
-      console.log(res);
       alert(
         'Something went wrong with the app when retrieving all events. Please refresh the page and try again.'
       );
@@ -135,8 +127,6 @@ export const fetchPlayerInfo = async id => {
       alert('Invalid player id. Nothing to show.');
       return null;
     } else {
-      // TODO REMOVE
-      console.log(res);
       alert(
         'Something went wrong with the app when retrieving event info. Please refresh the page and try again.'
       );
@@ -159,8 +149,6 @@ export const postAddEvent = async body => {
       );
       return null;
     } else {
-      // TODO REMOVE
-      console.log(res);
       alert(
         'Something went wrong with the app when adding an event. Please refresh the page and try again.'
       );
@@ -178,8 +166,6 @@ export const postAddPlayer = async body => {
     if (res.status === 200) {
       return res.json();
     } else {
-      // TODO REMOVE
-      console.log(res);
       alert(
         'Something went wrong with the app when add a player. Please refresh the page and try again.'
       );
@@ -197,8 +183,6 @@ export const putUpdatePlayer = async body => {
     if (res.status === 200) {
       return res.json();
     } else {
-      // TODO REMOVE
-      console.log(res);
       alert(
         'Something went wrong with the app when updating a player. Please refresh the page and try again.'
       );
@@ -226,8 +210,6 @@ export const putUpdateEvent = async body => {
       );
       return null;
     } else {
-      // TODO REMOVE
-      console.log(res);
       alert(
         'Something went wrong with the app when updating an event. Please refresh the page and try again.'
       );

@@ -118,7 +118,7 @@ const SELECT_EVENT_INFO_WITHOUT_PLAYER_NAMES_QUERY = `
 const SELECT_EVENTS_WITH_DATE_AND_EVENT_NUM_QUERY = `
   SELECT id
   FROM events
-  WHERE date = $2 AND event_num = $3
+  WHERE date = $1 AND event_num = $2
 `;
 
 const SELECT_LATEST_PLAYER_RATINGS_QUERY = `

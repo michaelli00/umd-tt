@@ -124,9 +124,10 @@ const updateEventResults = async (
 
 const isDuplicateEventNum = async (client, date, eventNum) =>
   (
-    await client.query(
-      SELECT_EVENTS_WITH_DATE_AND_EVENT_NUM_QUERY[(date, eventNum)]
-    )
+    await client.query(SELECT_EVENTS_WITH_DATE_AND_EVENT_NUM_QUERY, [
+      date,
+      eventNum,
+    ])
   ).rows.length > 0;
 
 module.exports = {
