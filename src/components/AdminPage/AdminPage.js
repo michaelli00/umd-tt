@@ -4,6 +4,8 @@ import Button from 'react-bootstrap/Button';
 import ToggleButtonGroup from 'react-bootstrap/ToggleButtonGroup';
 import ToggleButton from 'react-bootstrap/ToggleButton';
 import Container from 'react-bootstrap/Container';
+import Row from 'react-bootstrap/Row';
+import Col from 'react-bootstrap/Col';
 import Form from 'react-bootstrap/Form';
 import Modal from 'react-bootstrap/Modal';
 import Table from 'react-bootstrap/Table';
@@ -43,6 +45,8 @@ function AdminPage() {
 
   const [playerInfo, setPlayerInfo] = useState({}); // selected player info
   const [eventInfo, setEventInfo] = useState({}); // selected event info
+
+  const [playerFilter, setPlayerFilter] = useState('');
 
   useEffect(() => {
     let loadAdminPageData = async () => {
@@ -491,12 +495,29 @@ function AdminPage() {
           </Modal>
           {adminValidated ? (
             <div>
-              <div className='admin-header'>
-                <h1>Player Rating List</h1>
-                <div className='change-button'>
-                  <Button onClick={onOpenAddPlayerForm}>Add New Player</Button>
-                </div>
-              </div>
+              <Container className='admin-header'>
+                <Row>
+                  <Col md={3} />
+                  <Col md={5}>
+                    <h1>Player Rating List</h1>
+                  </Col>
+                  <Col md={2}>
+                    <Form>
+                      <Form.Control
+                        type='search'
+                        placeholder='Search Players'
+                        className='text-truncate'
+                        onChange={val => setPlayerFilter(val.target.value)}
+                      />
+                    </Form>
+                  </Col>
+                  <Col md={2} className='change-button'>
+                    <Button onClick={onOpenAddPlayerForm}>
+                      Add New Player
+                    </Button>
+                  </Col>
+                </Row>
+              </Container>
               <Table striped bordered hover size='sm'>
                 <thead>
                   <tr>
@@ -507,33 +528,48 @@ function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {playerList.map(player => (
-                    <tr key={player.id}>
-                      <td>
-                        <Link to={`/player/${player.id}`}>{player.name}</Link>
-                      </td>
-                      <td>{player.rating}</td>
-                      <td>{player.active ? 'Active' : 'Inactive'}</td>
-                      <td>
-                        <Button
-                          onClick={() => onOpenUpdatePlayerInfoForm(player.id)}
-                        >
-                          Change
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {playerList
+                    .filter(
+                      player =>
+                        playerFilter === '' ||
+                        player.name
+                          .toLowerCase()
+                          .includes(playerFilter.toLowerCase())
+                    )
+                    .map(player => (
+                      <tr key={player.id}>
+                        <td>
+                          <Link to={`/player/${player.id}`}>{player.name}</Link>
+                        </td>
+                        <td>{player.rating}</td>
+                        <td>{player.active ? 'Active' : 'Inactive'}</td>
+                        <td>
+                          <Button
+                            onClick={() =>
+                              onOpenUpdatePlayerInfoForm(player.id)
+                            }
+                          >
+                            Change
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </Table>
               <br />
-              <div className='admin-header'>
-                <h1>Event List</h1>
-                <div className='change-button'>
-                  <Button onClick={onOpenResultsForm}>
-                    Add New Event Results
-                  </Button>
-                </div>
-              </div>
+              <Container className='admin-header'>
+                <Row>
+                  <Col md={3}/>
+                  <Col md={6}>
+                    <h1>Event List</h1>
+                  </Col>
+                  <Col md={3} className='change-button'>
+                    <Button onClick={onOpenResultsForm}>
+                      Add New Event Results
+                    </Button>
+                  </Col>
+                </Row>
+              </Container>
               <Table striped bordered hover size='sm'>
                 <thead>
                   <tr>

@@ -66,7 +66,7 @@ const SELECT_EVENTS_QUERY = `
   FROM events
   WHERE event_num != 0
   GROUP BY date
-  ORDER BY date
+  ORDER BY date DESC
 `;
 
 // Used for displaying event info

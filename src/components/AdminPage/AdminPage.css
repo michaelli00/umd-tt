@@ -29,23 +29,23 @@ h1 {
   border-color: black !important;
 }
 
-.admin-header {
-  display: grid;
-  grid-template-columns: 1fr repeat(3, auto) 1fr;
-  grid-column-gap: 5px;
-  justify-items: center;
-}
-
+/* .admin-header { */
+/*   display: grid; */
+/*   grid-template-columns: 1fr repeat(3, auto) 1fr; */
+/*   grid-column-gap: 5px; */
+/*   justify-items: center; */
+/* } */
+/**/
 .admin-header h1 {
   grid-column-start: 2;
 }
 
-.change-button {
-  grid-column-start: 5;
-  margin-left: auto;
-  margin-top: auto;
-  margin-bottom: auto;
-}
+/* .change-button { */
+/*   grid-column-start: 5; */
+/*   margin-left: auto; */
+/*   margin-top: auto; */
+/*   margin-bottom: auto; */
+/* } */
 
 .form-label {
   width: 30%;
