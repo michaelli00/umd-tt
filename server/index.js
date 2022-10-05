@@ -153,13 +153,18 @@ app.get('/api/events', (req, res) => {
       res.status(500).send('GET events errored');
       return;
     }
-    const toRet = results.rows.map(row => ({
-      date: row.date,
-      events: row.ids.map((id, index) => ({
+    const toRet = results.rows.map(row => {
+      const events = row.ids.map((id, index) => ({
         id: id,
         event_num: row.event_nums[index],
-      })),
-    }));
+      }));
+      events.sort((row1, row2) => row1.event_num - row2.event_num);
+
+      return {
+        date: row.date,
+        events: events,
+      };
+    });
     res.status(200).json(toRet);
   });
 });
