@@ -1,3 +1,4 @@
+import moment from 'moment-timezone';
 import Container from 'react-bootstrap/Container';
 import { Navbar } from 'react-bootstrap'; // Navbar needs to be imported like this way, was causing build issues otherwise
 import Nav from 'react-bootstrap/Nav';
@@ -16,6 +17,7 @@ import './App.css';
 
 function App() {
   const pathname = window.location.pathname;
+  moment.tz.setDefault("UTC");
   return (
     <div className='App'>
       <BrowserRouter>

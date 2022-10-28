@@ -41,6 +41,8 @@
     "mime": "^1.6.0",
     "mime-db": "^1.52.0",
     "mime-types": "^2.1.35",
+    "moment": "^2.29.4",
+    "moment-timezone": "^0.5.38",
     "ms": "^2.0.0",
     "negotiator": "^0.6.3",
     "object-assign": "^4.1.1",

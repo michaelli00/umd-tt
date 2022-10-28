@@ -1,3 +1,4 @@
+import moment from 'moment-timezone';
 import React, { useEffect, useState } from 'react';
 import Multiselect from 'multiselect-react-dropdown';
 import Button from 'react-bootstrap/Button';
@@ -444,8 +445,8 @@ function AdminPage() {
                         date: formatDateForRequest(date),
                       })
                     }
-                    minDate={new Date('2000-01-01')}
-                    maxDate={new Date()}
+                    minDate={moment([2000, 1, 1]).toDate()}
+                    maxDate={moment().toDate()}
                   />
                 </Form.Group>
                 <br />
@@ -559,7 +560,7 @@ function AdminPage() {
               <br />
               <Container className='admin-header'>
                 <Row>
-                  <Col md={3}/>
+                  <Col md={3} />
                   <Col md={6}>
                     <h1>Event List</h1>
                   </Col>

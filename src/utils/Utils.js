@@ -9,26 +9,24 @@ import {
   PUT_UPDATE_EVENT_URL,
   PUT_UPDATE_PLAYER_INFO_URL,
 } from './Constants.js';
+import moment from 'moment-timezone';
 
 // Stupid javascript timezone issues
 export const formatDate = input => {
-  const date = new Date(input);
-  return `
-    ${date.getUTCMonth() + 1}/${date.getUTCDate()}/${date.getUTCFullYear()}
-  `;
+  const momentDate = moment(input);
+  return momentDate.format('MM/DD/YYYY');
 };
 
 export const formatDateForRequest = input => {
-  const date = new Date(input);
-  return `
-    ${date.getUTCFullYear()}-${date.getUTCMonth() + 1}-${date.getUTCDate()}
-  `;
+  const momentDate = moment(input);
+  return momentDate.format('YYYY-MM-DD');
 };
 
 export const formatDateForDatePicker = input => {
   // Stupid javascript timezone issues
   // I really hate javascript dates
   // Like I really really despise javascript dates
+  // I despite javascript dates
   const dateFieldsList = input.split(/[-]/);
   const date = new Date(
     dateFieldsList[0],
