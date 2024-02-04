@@ -8,6 +8,7 @@ import {
   POST_ADD_PLAYER_URL,
   PUT_UPDATE_EVENT_URL,
   PUT_UPDATE_PLAYER_INFO_URL,
+  PUT_UPDATE_PLAYER_ACTIVE_STATUS_URL,
 } from './Constants.js';
 import moment from 'moment-timezone';
 
@@ -215,3 +216,20 @@ export const putUpdateEvent = async body => {
     }
   });
 };
+
+export const putUpdatePlayerActiveStatus = async body => {
+  return fetch(PUT_UPDATE_PLAYER_ACTIVE_STATUS_URL, {
+    method: 'put',
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+  }).then(res => {
+    if (res.status === 200) {
+      return res.json();
+    } else {
+      alert(
+        'Something went wrong with the app when updating player active status. Please refresh the page and try again.'
+      );
+      return null;
+    }
+  });
+}

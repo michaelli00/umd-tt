@@ -27,6 +27,7 @@ import {
   postAddPlayer,
   putUpdatePlayer,
   putUpdateEvent,
+  putUpdatePlayerActiveStatus,
 } from '../../utils/Utils';
 import 'react-datepicker/dist/react-datepicker.css';
 import './AdminPage.css';
@@ -48,6 +49,8 @@ function AdminPage() {
   const [eventInfo, setEventInfo] = useState({}); // selected event info
 
   const [playerFilter, setPlayerFilter] = useState('');
+
+  const [selectedPlayerList, setSelectedPlayerList] = useState([]); // selected players list
 
   useEffect(() => {
     let loadAdminPageData = async () => {
@@ -233,6 +236,26 @@ function AdminPage() {
       setEventInfo({});
     }
   };
+
+  const onMarkPlayersActiveStatus = async active => {
+    const reqBody = {
+      ids: selectedPlayerList,
+      active: active,
+    };
+    const updatedPlayersResponse = await putUpdatePlayerActiveStatus(reqBody);
+    if (updatedPlayersResponse !== null) {
+      setPlayerList(updatedPlayersResponse);
+      setSelectedPlayerList([]);
+    }
+  }
+
+  const onCheckboxChange = (player_id, checked) => {
+    if (checked) {
+      setSelectedPlayerList([...selectedPlayerList, player_id]);
+    } else {
+      setSelectedPlayerList(selectedPlayerList.filter(id => id !== player_id));
+    }
+  }
 
   const renderMatchResultsForm = players => {
     const playerMatchPairs = players
@@ -522,6 +545,16 @@ function AdminPage() {
               <Table striped bordered hover size='sm'>
                 <thead>
                   <tr>
+                    <th>
+                      <input
+                        type="checkbox"
+                        onChange={e => {
+                          setSelectedPlayerList(e.target.checked ? playerList.map(player => player.id) : [])
+                        }}
+                        checked={selectedPlayerList.length === playerList.length}
+                        style={{ margin: '10px' }}
+                      />
+                    </th>
                     <th>Player Name</th>
                     <th>Rating</th>
                     <th>Active/Inactive</th>
@@ -539,6 +572,15 @@ function AdminPage() {
                     )
                     .map(player => (
                       <tr key={player.id}>
+                        {/* Without the width=2%, the checkbox column is too wide */}
+                        <td width='2%'>
+                          <input
+                            type="checkbox"
+                            onChange={e => onCheckboxChange(player.id, e.target.checked)}
+                            checked={selectedPlayerList.includes(player.id)}
+                            style={{ margin: '10px' }}
+                          />
+                        </td>
                         <td>
                           <Link to={`/player/${player.id}`}>{player.name}</Link>
                         </td>
@@ -557,7 +599,16 @@ function AdminPage() {
                     ))}
                 </tbody>
               </Table>
-              <br />
+              <Button onClick={() => onMarkPlayersActiveStatus(false)} disabled={!selectedPlayerList.length}>
+                Mark Selected Players as Inactive
+              </Button>
+              {/* I'm going to leave this here in case we get a request for it in the future. At that
+              time we can simply expose it by uncommenting it (and maybe adding some styling) */}
+              {/* <br /> <br />
+              <Button onClick={() => onMarkPlayersActiveStatus(true)}>
+                FOR TESTING: Mark Selected Players as Active
+              </Button> */}
+              <br /> <br />
               <Container className='admin-header'>
                 <Row>
                   <Col md={3} />
