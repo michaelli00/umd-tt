@@ -32,6 +32,7 @@ const {
   INSERT_INTO_PLAYER_HISTORIES_QUERY,
   INSERT_INTO_PLAYERS_QUERY,
   UPDATE_EVENTS_QUERY,
+  UPDATE_PLAYER_ACTIVE_STATUS_QUERY,
   UPDATE_PLAYER_HISTORIES_WITH_ADJUSTED_RATING_QUERY,
   UPDATE_PLAYER_INFO_QUERY,
   UPDATE_PLAYER_QUERY,
@@ -690,6 +691,49 @@ app.put('/api/admin/update_player', async (req, res) => {
   } finally {
     client.release();
   }
+  res.status(200).json(toRet);
+});
+
+// Updates a player's info
+// input
+//   {
+//      "ids": [player_id_1, ...],
+//      "active": active
+//   }
+//
+// returns
+//    [
+//      {
+//        "id": player_ID,
+//        "name": player_name,
+//        "rating": rating,
+//        "active": active
+//      },
+//      ...
+//    ]
+app.put('/api/admin/update_players_active_status', async (req, res) => {
+  const { ids, active } = req.body;
+  const client = await pool.connect();
+  let toRet;
+
+  try {
+    await client.query('BEGIN');
+    for (const id of ids) {
+      await client.query(UPDATE_PLAYER_ACTIVE_STATUS_QUERY, [id, active]);
+    }
+    toRet = (await client.query(SELECT_ALL_PLAYERS_QUERY)).rows;
+    await client.query('COMMIT');
+
+  } catch (err) {
+    console.log(err);
+    await client.query('ROLLBACK');
+
+    res.status(500).send('PUT update player errored for at least one player');
+    return;
+  } finally {
+    client.release();
+  }
+
   res.status(200).json(toRet);
 });
 

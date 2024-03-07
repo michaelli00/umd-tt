@@ -9,5 +9,6 @@ export const POST_ADD_PLAYER_URL = '/api/admin/add_player';
 
 export const PUT_UPDATE_EVENT_URL = '/api/admin/update_event';
 export const PUT_UPDATE_PLAYER_INFO_URL = '/api/admin/update_player';
+export const PUT_UPDATE_PLAYER_ACTIVE_STATUS_URL = '/api/admin/update_players_active_status';
 
 export const LOADING_COLOR = '#C41E3A';
